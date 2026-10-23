@@ -8,6 +8,50 @@ class BaseSource {
     }
     this.name = name;
     this.displayName = displayName;
+    this.icon = null;
+  }
+
+  /**
+   * Extract or get the website favicon/icon URL.
+   * Scrapes <link rel="icon"> or <link rel="apple-touch-icon"> from the website's HTML.
+   * @returns {Promise<string|null>}
+   */
+  async getIcon() {
+    if (this.icon) return this.icon;
+    if (!this.baseUrl) return null;
+    try {
+      const { getHtml } = require('../utils/httpClient');
+      const cheerio = require('cheerio');
+      const html = await getHtml(this.baseUrl, { timeout: 8000 });
+      const $ = cheerio.load(html);
+
+      let iconHref =
+        $('link[rel="apple-touch-icon"]').attr('href') ||
+        $('link[rel="apple-touch-icon-precomposed"]').attr('href') ||
+        $('link[rel="icon"][sizes*="192"]').attr('href') ||
+        $('link[rel="icon"][sizes*="96"]').attr('href') ||
+        $('link[rel="icon"][sizes*="32"]').attr('href') ||
+        $('link[rel*="icon"]').attr('href');
+
+      if (!iconHref) {
+        this.icon = `${this.baseUrl.replace(/\/$/, '')}/favicon.ico`;
+        return this.icon;
+      }
+
+      if (iconHref.startsWith('//')) {
+        this.icon = `https:${iconHref}`;
+      } else if (iconHref.startsWith('/')) {
+        this.icon = `${this.baseUrl.replace(/\/$/, '')}${iconHref}`;
+      } else if (!iconHref.startsWith('http') && !iconHref.startsWith('data:')) {
+        this.icon = `${this.baseUrl.replace(/\/$/, '')}/${iconHref}`;
+      } else {
+        this.icon = iconHref;
+      }
+      return this.icon;
+    } catch (_) {
+      this.icon = `${this.baseUrl.replace(/\/$/, '')}/favicon.ico`;
+      return this.icon;
+    }
   }
 
   /**

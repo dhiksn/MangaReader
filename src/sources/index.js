@@ -12,6 +12,9 @@ const sources = new Map();
  */
 function registerSource(sourceInstance) {
   sources.set(sourceInstance.name.toLowerCase(), sourceInstance);
+  if (typeof sourceInstance.getIcon === 'function') {
+    sourceInstance.getIcon().catch(() => {});
+  }
 }
 
 /**
@@ -24,12 +27,13 @@ function getSource(name) {
 }
 
 /**
- * List all available registered sources.
+ * List all available registered sources with their website icons.
  */
 function listSources() {
   return Array.from(sources.values()).map((s) => ({
     id: s.name,
     name: s.displayName,
+    icon: s.icon || `${s.baseUrl}/favicon.ico`,
   }));
 }
 

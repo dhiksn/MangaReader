@@ -8,6 +8,7 @@ class ShinigamiSource extends BaseSource {
     super('shinigami', 'Shinigami');
     this.domain = 'id.shinigami.asia';
     this.baseUrl = `https://${this.domain}`;
+    this.icon = 'https://11.shinigami.asia/favicon.png';
     this.apiDomain = 'api.shngm.io/v1';
     this.cdnDomain = 'storage.shngm.id';
     this.pageSize = 24;

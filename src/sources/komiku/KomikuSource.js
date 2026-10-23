@@ -9,6 +9,7 @@ class KomikuSource extends BaseSource {
     super('komiku', 'Komiku');
     this.baseUrl = 'https://komiku.org';
     this.apiBaseUrl = 'https://api.komiku.org';
+    this.icon = 'https://komiku.org/asset/img/ico.ico';
 
     // Genres cache in memory (24h)
     this._cachedGenres = null;

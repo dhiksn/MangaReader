@@ -9,6 +9,7 @@ class DoujindesuSource extends BaseSource {
     super('doujindesu', 'DoujinDesu');
     this.domain = 'doujin.desu.xxx';
     this.baseUrl = `https://${this.domain}`;
+    this.icon = 'https://pic.desu.xxx/content/web/1217a30e-c660-4212-9d80-548df7aa166d.webp';
     this.secret = 'dfdf72051dbfdc7d76889ebd31324e74';
     this.pageSize = 24;
 

@@ -9,6 +9,7 @@ class HwagoSource extends BaseSource {
     super('hwago', 'Hwago');
     this.domain = '02.hwago.xyz';
     this.baseUrl = `https://${this.domain}`;
+    this.icon = 'https://02.hwago.xyz/icons/icon-192x192.png';
 
     // Genres cache in memory (24h)
     this._cachedGenres = null;

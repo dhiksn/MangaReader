@@ -10,6 +10,7 @@ class SoftkomikSource extends BaseSource {
     super('softkomik', 'Softkomik');
     this.domain = 'softkomik.app';
     this.baseUrl = `https://${this.domain}`;
+    this.icon = 'https://softkomik.app/icon-192.png';
     this.coverUrl = 'https://cover.softdevices.my.id/softkomik-cover';
     this.cdnUrl = 'https://image.komik.im/softkomik';
     this.cdnServers = {
