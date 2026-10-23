@@ -20,9 +20,14 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@whatwg-node/server": "^0.13.1",
     "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "dotenv": "^18.0.9",
     "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "wrangler": "^4.152.0"
   }
 }
