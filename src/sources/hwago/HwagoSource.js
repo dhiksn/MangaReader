@@ -8,7 +8,7 @@ class HwagoSource extends BaseSource {
   constructor() {
     super('hwago', 'Hwago');
     this.domain = '02.hwago.xyz';
-    this.baseUrl = process.env.HWAGO_PROXY_URL || `https://02.hwago.xyz`;
+    this.baseUrl = `https://${this.domain}`;
 
     // Genres cache in memory (24h)
     this._cachedGenres = null;
