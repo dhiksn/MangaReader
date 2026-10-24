@@ -453,20 +453,46 @@ class KomikuSource extends BaseSource {
 
   /**
    * Get manga list filtered by genre from api.komiku.org.
-   * @param {string} genre Genre name or slug (e.g. 'action', 'romance', 'isekai')
+   * Supports single genre or multi-genre comma-separated (e.g. 'action,comedy').
+   * @param {string|string[]} genre Genre name or slug(s)
    * @param {number} page Page number (default: 1)
    */
   async getByGenre(genre, page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const targetSlug = await this._resolveGenreSlug(genre);
-    const url = `${this.apiBaseUrl}/manga/page/${pageNum}/?genre=${encodeURIComponent(targetSlug)}`;
-    const html = await getHtml(url);
+    const rawList = Array.isArray(genre)
+      ? genre
+      : String(genre || '')
+          .split(/[,+]/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+    if (rawList.length === 0) {
+      throw createNotFound("Parameter 'genre' wajib diisi", 'INVALID_PARAMETER');
+    }
+
+    const resolvedGenres = await Promise.all(
+      rawList.map((g) => this._resolveGenreSlug(g))
+    );
+
+    const params = new URLSearchParams();
+    resolvedGenres.forEach((g, idx) => {
+      if (idx === 0) params.set('genre', g);
+      else params.set(`genre${idx + 1}`, g);
+    });
+
+    // Cache buster to bypass LiteSpeed Cache on api.komiku.org
+    params.set('_', Date.now());
+
+    const url = `${this.apiBaseUrl}/manga/page/${pageNum}/?${params.toString()}`;
+    const html = await getHtml(url, {
+      headers: { Referer: `${this.baseUrl}/pustaka/` },
+    });
     const data = await this._enrichPortraitCovers(this._parseMangaList(html));
     const pagination = this._extractPagination(html, pageNum);
 
     return {
       source: this.name,
-      genre: targetSlug,
+      genre: resolvedGenres.join(', '),
       data,
       pagination,
     };
