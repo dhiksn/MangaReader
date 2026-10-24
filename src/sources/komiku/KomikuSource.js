@@ -87,21 +87,17 @@ class KomikuSource extends BaseSource {
   }
 
   /**
-   * Resolves horizontal banner covers (manga_img_horizontal) to real portrait covers from detail page.
-   * Cached in memory for speed.
+   * Resolves landscape/horizontal thumbnails from div.bge to the official portrait covers from manga detail page.
+   * Cached in memory for near-instant responses.
    * @private
    */
   async _enrichPortraitCovers(items) {
     if (!Array.isArray(items) || items.length === 0) return items;
 
-    const horizontalItems = items.filter(
-      (item) => item.cover && item.cover.includes('manga_img_horizontal')
-    );
-
-    if (horizontalItems.length === 0) return items;
-
     await Promise.all(
-      horizontalItems.map(async (item) => {
+      items.map(async (item) => {
+        if (!item.slug) return;
+
         if (this._portraitCoversCache.has(item.slug)) {
           item.cover = this._portraitCoversCache.get(item.slug);
           return;
@@ -116,6 +112,10 @@ class KomikuSource extends BaseSource {
             '';
           if (portrait) {
             portrait = portrait.split('?')[0];
+            if (this._portraitCoversCache.size > 5000) {
+              const firstKey = this._portraitCoversCache.keys().next().value;
+              this._portraitCoversCache.delete(firstKey);
+            }
             this._portraitCoversCache.set(item.slug, portrait);
             item.cover = portrait;
           }
