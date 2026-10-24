@@ -650,6 +650,7 @@ class KomikuSource extends BaseSource {
 
       chapters.push({
         chapter: chNum,
+        slug: chNum,
         title: chTitle,
         endpoint: `/api/sources/${this.name}/chapter/${cleanSlug}/${chNum}`,
         date: dateText,
