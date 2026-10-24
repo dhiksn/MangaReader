@@ -27,13 +27,17 @@ function getSource(name) {
 }
 
 /**
- * List all available registered sources with their website icons.
+ * List all available registered sources with their website icons and supported sorts.
  */
 function listSources() {
   return Array.from(sources.values()).map((s) => ({
     id: s.name,
     name: s.displayName,
     icon: s.icon || `${s.baseUrl}/favicon.ico`,
+    sorts: typeof s.getSupportedSorts === 'function' ? s.getSupportedSorts() : [
+      { id: 'latest', name: 'Terbaru' },
+      { id: 'popular', name: 'Populer' },
+    ],
   }));
 }
 

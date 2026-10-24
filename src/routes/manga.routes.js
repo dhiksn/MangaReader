@@ -207,6 +207,48 @@ router.get(['/sources/:source/az', '/sources/:source/alphabetical'], resolveSour
 });
 
 /**
+ * GET /api/sources/:source/bookmark?page=1
+ * Get bookmarked / most favorite manga list for a source.
+ * - Shinigami: scrapes from /manga/list?sort=bookmark
+ */
+router.get(['/sources/:source/bookmark', '/sources/:source/favorites'], resolveSource, async (req, res, next) => {
+  try {
+    if (
+      typeof req.mangaSource.getList !== 'function' ||
+      req.mangaSource.getList === BaseSource.prototype.getList
+    ) {
+      throw createNotFound(
+        `Sumber '${req.mangaSource.name}' tidak menyediakan endpoint /bookmark`,
+        'NOT_FOUND'
+      );
+    }
+
+    const page = validatePageParam(req.query.page);
+    const result = await req.mangaSource.getList(page, { sort: 'bookmark' });
+    validatePageBounds(page, result);
+    const pagination =
+      result.pagination !== undefined
+        ? result.pagination
+        : formatPagination({
+            page,
+            maxPage: result.maxPage,
+            hasNextPage: result.hasNextPage,
+          });
+
+    res.json({
+      success: true,
+      source: result.source || req.mangaSource.name,
+      sort: 'bookmark',
+      ...(result.from ? { from: result.from } : {}),
+      data: result.data || [],
+      ...(isPaginationValid(pagination) ? { pagination } : {}),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /api/sources/:source/list?page=1
  * Get directory / catalog list of manga.
  * - Komiku: scrapes from https://komiku.org/daftar-komik/ (supports query params: page, letter/huruf)

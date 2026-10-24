@@ -148,6 +148,24 @@ class BaseSource {
   async getPages(slug, chapter, cdn = 'cdn1') {
     throw new Error(`getPages() not implemented for source: ${this.name}`);
   }
+
+  /**
+   * Get supported sort options for this source.
+   * @returns {Array<{id: string, name: string}>}
+   */
+  getSupportedSorts() {
+    const sorts = [
+      { id: 'latest', name: 'Terbaru' },
+      { id: 'popular', name: 'Populer' },
+    ];
+    if (typeof this.getRating === 'function') {
+      sorts.push({ id: 'rating', name: 'Rating' });
+    }
+    if (typeof this.getAz === 'function') {
+      sorts.push({ id: 'az', name: 'A-Z' });
+    }
+    return sorts;
+  }
 }
 
 module.exports = BaseSource;

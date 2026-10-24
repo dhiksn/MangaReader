@@ -886,6 +886,20 @@ class ShinigamiSource extends BaseSource {
       pages,
     };
   }
+
+  /**
+   * Get supported sort options for Shinigami.
+   * Shinigami supports latest, popular, rating, and bookmark (favorites) via /manga/list.
+   * Shinigami does NOT have alphabetical /az endpoint.
+   */
+  getSupportedSorts() {
+    return [
+      { id: 'latest', name: 'Terbaru' },
+      { id: 'popular', name: 'Populer' },
+      { id: 'rating', name: 'Rating' },
+      { id: 'bookmark', name: 'Terfavorit' },
+    ];
+  }
 }
 
 module.exports = ShinigamiSource;
