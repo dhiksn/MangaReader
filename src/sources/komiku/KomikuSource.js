@@ -90,53 +90,13 @@ class KomikuSource extends BaseSource {
   /**
    * Processes manga list from HTML:
    * 1. Extracts items from div.bge.
-   * 2. Immediately applies cached portrait covers (0ms).
-   * 3. Schedules non-blocking background enrichment for horizontal banners so browsing is lightning fast.
+   * 2. Resolves landscape/horizontal thumbnails to official portrait covers from manga detail page.
+   * 3. Uses memory cache (_portraitCoversCache) so cached items resolve instantly (0ms).
    * @private
    */
-  _processMangaList(html) {
+  async _processMangaList(html) {
     const items = this._parseMangaList(html);
-    for (const item of items) {
-      if (item.slug && this._portraitCoversCache.has(item.slug)) {
-        item.cover = this._portraitCoversCache.get(item.slug);
-      }
-    }
-    this._enrichInBackground(items);
-    return items;
-  }
-
-  /**
-   * Non-blocking background enrichment of portrait covers for items with horizontal crops.
-   * Runs asynchronously without holding up the HTTP response.
-   * @private
-   */
-  _enrichInBackground(items) {
-    if (!Array.isArray(items) || items.length === 0) return;
-    const toEnrich = items.filter(
-      (item) => item.slug && !this._portraitCoversCache.has(item.slug) && item.cover && item.cover.includes('horizontal')
-    );
-    if (toEnrich.length === 0) return;
-
-    (async () => {
-      for (const item of toEnrich) {
-        try {
-          const detailHtml = await getHtml(`${this.baseUrl}/manga/${item.slug}/`);
-          const $ = cheerio.load(detailHtml);
-          let portrait =
-            $('div.ims img, section.ims img').first().attr('data-src') ||
-            $('div.ims img, section.ims img').first().attr('src') ||
-            '';
-          if (portrait) {
-            portrait = portrait.split('?')[0];
-            if (this._portraitCoversCache.size > 5000) {
-              const firstKey = this._portraitCoversCache.keys().next().value;
-              this._portraitCoversCache.delete(firstKey);
-            }
-            this._portraitCoversCache.set(item.slug, portrait);
-          }
-        } catch (_) {}
-      }
-    })().catch(() => {});
+    return await this._enrichPortraitCovers(items);
   }
 
   /**
@@ -146,15 +106,23 @@ class KomikuSource extends BaseSource {
   async _enrichPortraitCovers(items) {
     if (!Array.isArray(items) || items.length === 0) return items;
 
+    // 1. Immediately apply cached portrait covers
+    for (const item of items) {
+      if (item.slug && this._portraitCoversCache.has(item.slug)) {
+        item.cover = this._portraitCoversCache.get(item.slug);
+      }
+    }
+
+    // 2. Find items that still have horizontal/landscape covers
+    const horizontalItems = items.filter(
+      (item) => item.slug && item.cover && (item.cover.includes('horizontal') || item.cover.includes('resize=450'))
+    );
+
+    if (horizontalItems.length === 0) return items;
+
+    // 3. Fetch detail page in parallel to get official portrait cover
     await Promise.all(
-      items.map(async (item) => {
-        if (!item.slug) return;
-
-        if (this._portraitCoversCache.has(item.slug)) {
-          item.cover = this._portraitCoversCache.get(item.slug);
-          return;
-        }
-
+      horizontalItems.map(async (item) => {
         try {
           const html = await getHtml(`${this.baseUrl}/manga/${item.slug}/`);
           const $ = cheerio.load(html);
@@ -232,7 +200,7 @@ class KomikuSource extends BaseSource {
     const html = await getHtml(url, {
       headers: { Referer: `${this.baseUrl}/pustaka/` },
     });
-    const data = this._processMangaList(html);
+    const data = await this._processMangaList(html);
     const pagination = this._extractPagination(html, pageNum);
 
     return {
@@ -376,7 +344,7 @@ class KomikuSource extends BaseSource {
     const html = await getHtml(`${this.apiBaseUrl}/manga/page/${pageNum}/?${params.toString()}`, {
       headers: { Referer: `${this.baseUrl}/pustaka/` },
     });
-    const data = this._processMangaList(html);
+    const data = await this._processMangaList(html);
     const pagination = this._extractPagination(html, pageNum);
 
     return {
@@ -411,7 +379,7 @@ class KomikuSource extends BaseSource {
       throw err;
     }
 
-    const data = this._processMangaList(html);
+    const data = await this._processMangaList(html);
 
     // If on page 1 and no results found, return empty data with no pagination
     if (data.length === 0) {
@@ -538,7 +506,7 @@ class KomikuSource extends BaseSource {
     const html = await getHtml(url, {
       headers: { Referer: `${this.baseUrl}/pustaka/` },
     });
-    const data = this._processMangaList(html);
+    const data = await this._processMangaList(html);
     const pagination = this._extractPagination(html, pageNum);
 
     return {
@@ -566,7 +534,7 @@ class KomikuSource extends BaseSource {
     const cleanType = String(type || '').trim().toLowerCase();
     const url = `${this.apiBaseUrl}/manga/page/${pageNum}/?tipe=${encodeURIComponent(cleanType)}`;
     const html = await getHtml(url);
-    const data = this._processMangaList(html);
+    const data = await this._processMangaList(html);
     const pagination = this._extractPagination(html, pageNum);
 
     return {
