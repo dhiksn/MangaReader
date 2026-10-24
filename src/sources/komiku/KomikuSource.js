@@ -113,16 +113,16 @@ class KomikuSource extends BaseSource {
       }
     }
 
-    // 2. Find items that still have horizontal/landscape covers
-    const horizontalItems = items.filter(
-      (item) => item.slug && item.cover && (item.cover.includes('horizontal') || item.cover.includes('resize=450'))
+    // 2. Find any items that have not yet had their official portrait resolved from detail page
+    const toEnrich = items.filter(
+      (item) => item.slug && !this._portraitCoversCache.has(item.slug)
     );
 
-    if (horizontalItems.length === 0) return items;
+    if (toEnrich.length === 0) return items;
 
     // 3. Fetch detail page in parallel to get official portrait cover
     await Promise.all(
-      horizontalItems.map(async (item) => {
+      toEnrich.map(async (item) => {
         try {
           const html = await getHtml(`${this.baseUrl}/manga/${item.slug}/`);
           const $ = cheerio.load(html);
