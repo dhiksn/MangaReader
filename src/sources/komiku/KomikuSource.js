@@ -14,6 +14,9 @@ class KomikuSource extends BaseSource {
     // Genres cache in memory (24h)
     this._cachedGenres = null;
     this._cachedGenresExpiresAt = 0;
+
+    // Portrait covers cache in memory for horizontal image fallback
+    this._portraitCoversCache = new Map();
   }
 
   /**
@@ -84,6 +87,48 @@ class KomikuSource extends BaseSource {
   }
 
   /**
+   * Resolves horizontal banner covers (manga_img_horizontal) to real portrait covers from detail page.
+   * Cached in memory for speed.
+   * @private
+   */
+  async _enrichPortraitCovers(items) {
+    if (!Array.isArray(items) || items.length === 0) return items;
+
+    const horizontalItems = items.filter(
+      (item) => item.cover && item.cover.includes('manga_img_horizontal')
+    );
+
+    if (horizontalItems.length === 0) return items;
+
+    await Promise.all(
+      horizontalItems.map(async (item) => {
+        if (this._portraitCoversCache.has(item.slug)) {
+          item.cover = this._portraitCoversCache.get(item.slug);
+          return;
+        }
+
+        try {
+          const html = await getHtml(`${this.baseUrl}/manga/${item.slug}/`);
+          const $ = cheerio.load(html);
+          let portrait =
+            $('div.ims img, section.ims img').first().attr('data-src') ||
+            $('div.ims img, section.ims img').first().attr('src') ||
+            '';
+          if (portrait) {
+            portrait = portrait.split('?')[0];
+            this._portraitCoversCache.set(item.slug, portrait);
+            item.cover = portrait;
+          }
+        } catch (_) {
+          // If fetch fails, retain the existing fallback cover
+        }
+      })
+    );
+
+    return items;
+  }
+
+  /**
    * Extract pagination metadata from HTMX infinite scroll tags on api.komiku.org.
    * @private
    */
@@ -135,7 +180,7 @@ class KomikuSource extends BaseSource {
     const html = await getHtml(url, {
       headers: { Referer: `${this.baseUrl}/pustaka/` },
     });
-    const data = this._parseMangaList(html);
+    const data = await this._enrichPortraitCovers(this._parseMangaList(html));
     const pagination = this._extractPagination(html, pageNum);
 
     return {
@@ -279,7 +324,7 @@ class KomikuSource extends BaseSource {
     const html = await getHtml(`${this.apiBaseUrl}/manga/page/${pageNum}/?${params.toString()}`, {
       headers: { Referer: `${this.baseUrl}/pustaka/` },
     });
-    const data = this._parseMangaList(html);
+    const data = await this._enrichPortraitCovers(this._parseMangaList(html));
     const pagination = this._extractPagination(html, pageNum);
 
     return {
@@ -314,7 +359,7 @@ class KomikuSource extends BaseSource {
       throw err;
     }
 
-    const data = this._parseMangaList(html);
+    const data = await this._enrichPortraitCovers(this._parseMangaList(html));
 
     // If on page 1 and no results found, return empty data with no pagination
     if (data.length === 0) {
@@ -416,7 +461,7 @@ class KomikuSource extends BaseSource {
     const targetSlug = await this._resolveGenreSlug(genre);
     const url = `${this.apiBaseUrl}/manga/page/${pageNum}/?genre=${encodeURIComponent(targetSlug)}`;
     const html = await getHtml(url);
-    const data = this._parseMangaList(html);
+    const data = await this._enrichPortraitCovers(this._parseMangaList(html));
     const pagination = this._extractPagination(html, pageNum);
 
     return {
@@ -444,7 +489,7 @@ class KomikuSource extends BaseSource {
     const cleanType = String(type || '').trim().toLowerCase();
     const url = `${this.apiBaseUrl}/manga/page/${pageNum}/?tipe=${encodeURIComponent(cleanType)}`;
     const html = await getHtml(url);
-    const data = this._parseMangaList(html);
+    const data = await this._enrichPortraitCovers(this._parseMangaList(html));
     const pagination = this._extractPagination(html, pageNum);
 
     return {
@@ -508,7 +553,10 @@ class KomikuSource extends BaseSource {
 
     let cover =
       $('div.ims img, div.ims > img').first().attr('data-src') || $('div.ims img').first().attr('src') || '';
-    if (cover) cover = cover.split('?')[0];
+    if (cover) {
+      cover = cover.split('?')[0];
+      this._portraitCoversCache.set(cleanSlug, cover);
+    }
 
     const chapters = [];
     $('#Daftar_Chapter tr').each((_, tr) => {
