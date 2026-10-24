@@ -467,8 +467,8 @@ router.get('/sources/:source/manga/:slug', resolveSource, async (req, res, next)
 });
 
 /**
- * GET /api/sources/:source/chapter/:slug/:chapter?server=1|2|3|4
- * Get chapter image pages with selectable server (shinigami only, others ignored).
+ * GET /api/sources/:source/chapter/:slug/:chapter?server=1|2|3|4&cdn=cdn1|cdn2|cdn3
+ * Get chapter image pages with selectable server/CDN (shinigami & softkomik).
  */
 router.get('/sources/:source/chapter/:slug/:chapter', resolveSource, async (req, res, next) => {
   try {
@@ -478,9 +478,17 @@ router.get('/sources/:source/chapter/:slug/:chapter', resolveSource, async (req,
       throw createBadRequest("Parameter 'chapter' wajib diisi", 'INVALID_PARAMETER');
     }
 
-    const server = parseInt(req.query.server, 10) || 1;
+    let serverParam;
+    if (req.mangaSource.name === 'shinigami') {
+      serverParam = parseInt(req.query.server || req.query.cdn, 10) || 1;
+    } else if (req.mangaSource.name === 'softkomik') {
+      const rawCdn = req.query.cdn || (req.query.server ? `cdn${req.query.server}` : 'cdn1');
+      serverParam = String(rawCdn).toLowerCase().trim();
+    } else {
+      serverParam = req.query.server || req.query.cdn;
+    }
 
-    const { source, ...result } = await req.mangaSource.getPages(slug, chapter, server);
+    const { source, ...result } = await req.mangaSource.getPages(slug, chapter, serverParam);
     const host = req.get('host');
     const protocol = req.protocol;
     const baseUrl = `${protocol}://${host}`;
