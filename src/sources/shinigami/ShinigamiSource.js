@@ -11,6 +11,13 @@ class ShinigamiSource extends BaseSource {
     this.icon = 'https://11.shinigami.asia/favicon.png';
     this.apiDomain = 'api.shngm.io/v1';
     this.cdnDomain = 'storage.shngm.id';
+    // CDN domains per server (1=default, 2-4=alternates)
+    this.cdnServers = {
+      1: 'storage.shngm.id',
+      2: 'delivery.shngm.id',
+      3: 'mirror1.shngm.id',
+      4: 'mirror2.shngm.id',
+    };
     this.pageSize = 24;
 
     // In-memory cache for slug <-> manga_id mapping
@@ -821,12 +828,15 @@ class ShinigamiSource extends BaseSource {
    * @param {string|number} chapter Chapter number or UUID
    * @param {string} [cdn='cdn1'] CDN identifier (unused for Shinigami)
    */
-  async getPages(slug, chapter, cdn = 'cdn1') {
+  async getPages(slug, chapter, server = 1) {
     const cleanSlug = String(slug || '').replace(/^\/+|\/+$/g, '').split('/')[0];
     const rawChapter = String(chapter || '').trim();
     if (!cleanSlug || !rawChapter) {
       throw createBadRequest("Parameter 'slug' dan 'chapter' wajib diisi", 'INVALID_PARAMETER');
     }
+
+    const serverNum = parseInt(server, 10);
+    const cleanServer = [1, 2, 3, 4].includes(serverNum) ? serverNum : 1;
 
     const mangaId = await this._resolveMangaId(cleanSlug);
     if (!mangaId) {
@@ -856,16 +866,19 @@ class ShinigamiSource extends BaseSource {
       throw createNotFound(`Chapter '${rawChapter}' tidak ditemukan untuk manga '${cleanSlug}'`, 'NOT_FOUND');
     }
 
-    const detailRes = await this._fetchApi(`/chapter/detail/${targetChapter.chapter_id}`);
+    const detailRes = await this._fetchApi(`/chapter/detail/${targetChapter.chapter_id}`, { server: cleanServer });
     const chapterData = detailRes.data?.chapter;
     if (!chapterData || !Array.isArray(chapterData.data)) {
       throw createBadGateway('Data halaman chapter dari Shinigami tidak lengkap', 'UPSTREAM_ERROR');
     }
 
+    // Use cdnServers mapping — API base_url is unreliable (always returns assets.shngm.id)
+    const cdnBase = `https://${this.cdnServers[cleanServer] || this.cdnDomain}`;
+
     const basePath = chapterData.path.endsWith('/') ? chapterData.path : `${chapterData.path}/`;
     const pages = chapterData.data.map((imgFile, index) => {
       const cleanImgFile = imgFile.startsWith('/') ? imgFile.slice(1) : imgFile;
-      const imageUrl = `https://${this.cdnDomain}${basePath}${cleanImgFile}`;
+      const imageUrl = `${cdnBase}${basePath}${cleanImgFile}`;
       return {
         page: index + 1,
         url: imageUrl,
@@ -882,6 +895,7 @@ class ShinigamiSource extends BaseSource {
     return {
       source: this.name,
       title: `${mangaTitle} Chapter ${chapterNum}`,
+      server: cleanServer,
       totalPages: pages.length,
       pages,
     };

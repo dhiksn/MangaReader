@@ -467,8 +467,8 @@ router.get('/sources/:source/manga/:slug', resolveSource, async (req, res, next)
 });
 
 /**
- * GET /api/sources/:source/chapter/:slug/:chapter?cdn=cdn1|cdn2|cdn3
- * Get chapter image pages with selectable CDN.
+ * GET /api/sources/:source/chapter/:slug/:chapter?server=1|2|3|4
+ * Get chapter image pages with selectable server (shinigami only, others ignored).
  */
 router.get('/sources/:source/chapter/:slug/:chapter', resolveSource, async (req, res, next) => {
   try {
@@ -478,17 +478,9 @@ router.get('/sources/:source/chapter/:slug/:chapter', resolveSource, async (req,
       throw createBadRequest("Parameter 'chapter' wajib diisi", 'INVALID_PARAMETER');
     }
 
-    const rawCdn = req.query.cdn || 'cdn1';
-    const cdn = String(rawCdn).toLowerCase().trim();
-    const validCdns = ['cdn1', 'cdn2', 'cdn3'];
-    if (!validCdns.includes(cdn)) {
-      throw createBadRequest(
-        `Pilihan CDN '${rawCdn}' tidak valid. Pilihan tersedia: ${validCdns.join(', ')}`,
-        'INVALID_PARAMETER'
-      );
-    }
+    const server = parseInt(req.query.server, 10) || 1;
 
-    const { source, ...result } = await req.mangaSource.getPages(slug, chapter, cdn);
+    const { source, ...result } = await req.mangaSource.getPages(slug, chapter, server);
     const host = req.get('host');
     const protocol = req.protocol;
     const baseUrl = `${protocol}://${host}`;
