@@ -1,0 +1,454 @@
+[
+  {
+    "name": "4-Koma",
+    "slug": "4-koma"
+  },
+  {
+    "name": "Academy",
+    "slug": "academy"
+  },
+  {
+    "name": "Action",
+    "slug": "action"
+  },
+  {
+    "name": "Adaptation",
+    "slug": "adaptation"
+  },
+  {
+    "name": "Adult",
+    "slug": "adult"
+  },
+  {
+    "name": "Adventure",
+    "slug": "adventure"
+  },
+  {
+    "name": "apocalypse",
+    "slug": "apocalypse"
+  },
+  {
+    "name": "Beasts",
+    "slug": "beasts"
+  },
+  {
+    "name": "Blacksmith",
+    "slug": "blacksmith"
+  },
+  {
+    "name": "Businessman",
+    "slug": "businessman"
+  },
+  {
+    "name": "Comedy",
+    "slug": "comedy"
+  },
+  {
+    "name": "Comic",
+    "slug": "comic"
+  },
+  {
+    "name": "Cooking",
+    "slug": "cooking"
+  },
+  {
+    "name": "Crime",
+    "slug": "crime"
+  },
+  {
+    "name": "Crossdressing",
+    "slug": "crossdressing"
+  },
+  {
+    "name": "Dark Fantasy",
+    "slug": "dark-fantasy"
+  },
+  {
+    "name": "Demon",
+    "slug": "demon"
+  },
+  {
+    "name": "Demons",
+    "slug": "demons"
+  },
+  {
+    "name": "Doujinshi",
+    "slug": "doujinshi"
+  },
+  {
+    "name": "Drama",
+    "slug": "drama"
+  },
+  {
+    "name": "Ecchi",
+    "slug": "ecchi"
+  },
+  {
+    "name": "Entertainment",
+    "slug": "entertainment"
+  },
+  {
+    "name": "Fantasy",
+    "slug": "fantasy"
+  },
+  {
+    "name": "Fight",
+    "slug": "fight"
+  },
+  {
+    "name": "Fighting",
+    "slug": "fighting"
+  },
+  {
+    "name": "Furry",
+    "slug": "furry"
+  },
+  {
+    "name": "Game",
+    "slug": "game"
+  },
+  {
+    "name": "Games",
+    "slug": "games"
+  },
+  {
+    "name": "Gender Bender",
+    "slug": "gender-bender"
+  },
+  {
+    "name": "Genderswap",
+    "slug": "genderswap"
+  },
+  {
+    "name": "Genius",
+    "slug": "genius"
+  },
+  {
+    "name": "Ghosts",
+    "slug": "ghosts"
+  },
+  {
+    "name": "Girls' Love",
+    "slug": "girls-love"
+  },
+  {
+    "name": "Gore",
+    "slug": "gore"
+  },
+  {
+    "name": "Gyaru",
+    "slug": "gyaru"
+  },
+  {
+    "name": "Harem",
+    "slug": "harem"
+  },
+  {
+    "name": "Hentai",
+    "slug": "hentai"
+  },
+  {
+    "name": "Historical",
+    "slug": "historical"
+  },
+  {
+    "name": "Horror",
+    "slug": "horror"
+  },
+  {
+    "name": "Isekai",
+    "slug": "isekai"
+  },
+  {
+    "name": "Josei",
+    "slug": "josei"
+  },
+  {
+    "name": "Kids",
+    "slug": "kids"
+  },
+  {
+    "name": "Knight",
+    "slug": "knight"
+  },
+  {
+    "name": "Long Strip",
+    "slug": "long-strip"
+  },
+  {
+    "name": "Magic",
+    "slug": "magic"
+  },
+  {
+    "name": "Magical Girls",
+    "slug": "magical-girls"
+  },
+  {
+    "name": "Manga",
+    "slug": "manga"
+  },
+  {
+    "name": "Mangatoon",
+    "slug": "mangatoon"
+  },
+  {
+    "name": "Manhwa",
+    "slug": "manhwa"
+  },
+  {
+    "name": "Martial Art",
+    "slug": "martial-art"
+  },
+  {
+    "name": "Martial Arts",
+    "slug": "martial-arts"
+  },
+  {
+    "name": "Mature",
+    "slug": "mature"
+  },
+  {
+    "name": "MC Rebirth",
+    "slug": "mc-rebirth"
+  },
+  {
+    "name": "Mecha",
+    "slug": "mecha"
+  },
+  {
+    "name": "Medical",
+    "slug": "medical"
+  },
+  {
+    "name": "Military",
+    "slug": "military"
+  },
+  {
+    "name": "Modern",
+    "slug": "modern"
+  },
+  {
+    "name": "Monster",
+    "slug": "monster"
+  },
+  {
+    "name": "Monster girls",
+    "slug": "monster-girls"
+  },
+  {
+    "name": "Monsters",
+    "slug": "monsters"
+  },
+  {
+    "name": "Murim",
+    "slug": "murim"
+  },
+  {
+    "name": "Music",
+    "slug": "music"
+  },
+  {
+    "name": "Mystery",
+    "slug": "mystery"
+  },
+  {
+    "name": "Mythology",
+    "slug": "mythology"
+  },
+  {
+    "name": "Office Workers",
+    "slug": "office-workers"
+  },
+  {
+    "name": "One Shot",
+    "slug": "one-shot"
+  },
+  {
+    "name": "Oneshot",
+    "slug": "oneshot"
+  },
+  {
+    "name": "Police",
+    "slug": "police"
+  },
+  {
+    "name": "Psychological",
+    "slug": "psychological"
+  },
+  {
+    "name": "Regression",
+    "slug": "regression"
+  },
+  {
+    "name": "Reincarnation",
+    "slug": "reincarnation"
+  },
+  {
+    "name": "Revenge",
+    "slug": "revenge"
+  },
+  {
+    "name": "Reverse Harem",
+    "slug": "reverse-harem"
+  },
+  {
+    "name": "Romance",
+    "slug": "romance"
+  },
+  {
+    "name": "School",
+    "slug": "school"
+  },
+  {
+    "name": "School life",
+    "slug": "school-life"
+  },
+  {
+    "name": "Sci-fi",
+    "slug": "sci-fi"
+  },
+  {
+    "name": "Seinen",
+    "slug": "seinen"
+  },
+  {
+    "name": "Sexual Violence",
+    "slug": "sexual-violence"
+  },
+  {
+    "name": "Shotacon",
+    "slug": "shotacon"
+  },
+  {
+    "name": "Shoujo",
+    "slug": "shoujo"
+  },
+  {
+    "name": "Shoujo Ai",
+    "slug": "shoujo-ai"
+  },
+  {
+    "name": "Shoujo(G)",
+    "slug": "shoujog"
+  },
+  {
+    "name": "Shounen",
+    "slug": "shounen"
+  },
+  {
+    "name": "Shounen Ai",
+    "slug": "shounen-ai"
+  },
+  {
+    "name": "Slice of Life",
+    "slug": "slice-of-life"
+  },
+  {
+    "name": "Slow Life",
+    "slug": "slow-life"
+  },
+  {
+    "name": "Smut",
+    "slug": "smut"
+  },
+  {
+    "name": "Sport",
+    "slug": "sport"
+  },
+  {
+    "name": "Sports",
+    "slug": "sports"
+  },
+  {
+    "name": "Strategy",
+    "slug": "strategy"
+  },
+  {
+    "name": "Super Power",
+    "slug": "super-power"
+  },
+  {
+    "name": "Supernatural",
+    "slug": "supernatural"
+  },
+  {
+    "name": "Supranatural",
+    "slug": "supranatural"
+  },
+  {
+    "name": "Survival",
+    "slug": "survival"
+  },
+  {
+    "name": "Sword Fight",
+    "slug": "sword-fight"
+  },
+  {
+    "name": "Sword Master",
+    "slug": "sword-master"
+  },
+  {
+    "name": "Swormanship",
+    "slug": "swormanship"
+  },
+  {
+    "name": "System",
+    "slug": "system"
+  },
+  {
+    "name": "Thriller",
+    "slug": "thriller"
+  },
+  {
+    "name": "Time Travel",
+    "slug": "time-travel"
+  },
+  {
+    "name": "Tragedy",
+    "slug": "tragedy"
+  },
+  {
+    "name": "Trauma",
+    "slug": "trauma"
+  },
+  {
+    "name": "Vampire",
+    "slug": "vampire"
+  },
+  {
+    "name": "Video Games",
+    "slug": "video-games"
+  },
+  {
+    "name": "Villainess",
+    "slug": "villainess"
+  },
+  {
+    "name": "Violence",
+    "slug": "violence"
+  },
+  {
+    "name": "Web Comic",
+    "slug": "web-comic"
+  },
+  {
+    "name": "Webtoon",
+    "slug": "webtoon"
+  },
+  {
+    "name": "Webtoons",
+    "slug": "webtoons"
+  },
+  {
+    "name": "Xianxia",
+    "slug": "xianxia"
+  },
+  {
+    "name": "Xuanhuan",
+    "slug": "xuanhuan"
+  },
+  {
+    "name": "Yuri",
+    "slug": "yuri"
+  }
+]

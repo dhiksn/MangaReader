@@ -3,6 +3,7 @@ const BaseSource = require('../BaseSource');
 const { getHtml } = require('../../utils/httpClient');
 const { createNotFound } = require('../../utils/errors');
 const { formatPagination } = require('../../utils/responseHelper');
+const staticKomikuGenres = require('./komikuGenres.json');
 
 class KomikuSource extends BaseSource {
   constructor() {
@@ -11,9 +12,9 @@ class KomikuSource extends BaseSource {
     this.apiBaseUrl = 'https://api.komiku.org';
     this.icon = 'https://komiku.org/asset/img/ico.ico';
 
-    // Genres cache in memory (24h)
-    this._cachedGenres = null;
-    this._cachedGenresExpiresAt = 0;
+    // Genres cache in memory initialized with static list for instant 0ms responses
+    this._cachedGenres = staticKomikuGenres;
+    this._cachedGenresExpiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
 
     // Portrait covers cache in memory for horizontal image fallback
     this._portraitCoversCache = new Map();
@@ -521,15 +522,14 @@ class KomikuSource extends BaseSource {
       throw createNotFound("Parameter 'genre' wajib diisi", 'INVALID_PARAMETER');
     }
 
+    // Komiku pustaka search only supports up to 2 genres: 'genre' and 'genre2'
     const resolvedGenres = await Promise.all(
-      rawList.map((g) => this._resolveGenreSlug(g))
+      rawList.slice(0, 2).map((g) => this._resolveGenreSlug(g))
     );
 
     const params = new URLSearchParams();
-    resolvedGenres.forEach((g, idx) => {
-      if (idx === 0) params.set('genre', g);
-      else params.set(`genre${idx + 1}`, g);
-    });
+    if (resolvedGenres[0]) params.set('genre', resolvedGenres[0]);
+    if (resolvedGenres[1]) params.set('genre2', resolvedGenres[1]);
 
     // Cache buster to bypass LiteSpeed Cache on api.komiku.org
     params.set('_', Date.now());
