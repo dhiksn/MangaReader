@@ -12,6 +12,30 @@ const {
 const router = express.Router();
 
 /**
+ * In-memory TTL cache for semi-static endpoints (popular, rating, az, bookmark).
+ * Note: /latest is intentionally NOT cached for long so new chapter updates are always immediate.
+ */
+const routeCache = new Map();
+
+function getRouteCache(key) {
+  const item = routeCache.get(key);
+  if (!item) return null;
+  if (Date.now() > item.expiresAt) {
+    routeCache.delete(key);
+    return null;
+  }
+  return item.data;
+}
+
+function setRouteCache(key, data, ttlMs = 5 * 60 * 1000) {
+  routeCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+  if (routeCache.size > 200) {
+    const firstKey = routeCache.keys().next().value;
+    routeCache.delete(firstKey);
+  }
+}
+
+/**
  * Middleware to resolve and validate the requested source.
  */
 function resolveSource(req, res, next) {
@@ -67,6 +91,12 @@ router.get('/sources', (req, res) => {
 router.get('/sources/:source/popular', resolveSource, async (req, res, next) => {
   try {
     const page = validatePageParam(req.query.page);
+    const cacheKey = `popular:${req.mangaSource.name}:${page}`;
+    const cached = getRouteCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const result = await req.mangaSource.getPopular(page);
     validatePageBounds(page, result);
     const pagination =
@@ -78,12 +108,15 @@ router.get('/sources/:source/popular', resolveSource, async (req, res, next) => 
             hasNextPage: result.hasNextPage,
           });
 
-    res.json({
+    const responsePayload = {
       success: true,
       source: result.source || req.mangaSource.name,
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
-    });
+    };
+
+    setRouteCache(cacheKey, responsePayload, 5 * 60 * 1000);
+    res.json(responsePayload);
   } catch (err) {
     next(err);
   }
@@ -143,6 +176,12 @@ router.get('/sources/:source/rating', resolveSource, async (req, res, next) => {
     }
 
     const page = validatePageParam(req.query.page);
+    const cacheKey = `rating:${req.mangaSource.name}:${page}`;
+    const cached = getRouteCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const result = await req.mangaSource.getRating(page);
     validatePageBounds(page, result);
     const pagination =
@@ -154,14 +193,17 @@ router.get('/sources/:source/rating', resolveSource, async (req, res, next) => {
             hasNextPage: result.hasNextPage,
           });
 
-    res.json({
+    const responsePayload = {
       success: true,
       source: result.source || req.mangaSource.name,
       sort: result.sort || 'rating',
       ...(result.from ? { from: result.from } : {}),
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
-    });
+    };
+
+    setRouteCache(cacheKey, responsePayload, 5 * 60 * 1000);
+    res.json(responsePayload);
   } catch (err) {
     next(err);
   }
@@ -182,6 +224,12 @@ router.get(['/sources/:source/az', '/sources/:source/alphabetical'], resolveSour
     }
 
     const page = validatePageParam(req.query.page);
+    const cacheKey = `az:${req.mangaSource.name}:${page}`;
+    const cached = getRouteCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const result = await req.mangaSource.getAz(page);
     validatePageBounds(page, result);
     const pagination =
@@ -193,14 +241,17 @@ router.get(['/sources/:source/az', '/sources/:source/alphabetical'], resolveSour
             hasNextPage: result.hasNextPage,
           });
 
-    res.json({
+    const responsePayload = {
       success: true,
       source: result.source || req.mangaSource.name,
       sort: result.sort || 'az',
       ...(result.from ? { from: result.from } : {}),
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
-    });
+    };
+
+    setRouteCache(cacheKey, responsePayload, 5 * 60 * 1000);
+    res.json(responsePayload);
   } catch (err) {
     next(err);
   }
@@ -224,6 +275,12 @@ router.get(['/sources/:source/bookmark', '/sources/:source/favorites'], resolveS
     }
 
     const page = validatePageParam(req.query.page);
+    const cacheKey = `bookmark:${req.mangaSource.name}:${page}`;
+    const cached = getRouteCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const result = await req.mangaSource.getList(page, { sort: 'bookmark' });
     validatePageBounds(page, result);
     const pagination =
@@ -235,14 +292,17 @@ router.get(['/sources/:source/bookmark', '/sources/:source/favorites'], resolveS
             hasNextPage: result.hasNextPage,
           });
 
-    res.json({
+    const responsePayload = {
       success: true,
       source: result.source || req.mangaSource.name,
       sort: 'bookmark',
       ...(result.from ? { from: result.from } : {}),
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
-    });
+    };
+
+    setRouteCache(cacheKey, responsePayload, 5 * 60 * 1000);
+    res.json(responsePayload);
   } catch (err) {
     next(err);
   }
