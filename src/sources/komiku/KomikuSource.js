@@ -749,8 +749,10 @@ class KomikuSource extends BaseSource {
         !src ||
         src.includes('komiku-promosi') ||
         src.includes('promosi') ||
-        src.includes('ads') ||
-        src.includes('banner')
+        /\/ads[\/_.-]/i.test(src) ||
+        src.includes('googleads') ||
+        src.includes('adservice') ||
+        /\/banner[\/_.-]/i.test(src)
       ) {
         return;
       }
