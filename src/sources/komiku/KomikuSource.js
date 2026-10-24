@@ -663,6 +663,9 @@ class KomikuSource extends BaseSource {
       });
     });
 
+    // Enrich similar comics with official portrait covers
+    await this._enrichPortraitCovers(similar);
+
     return {
       source: this.name,
       title,
