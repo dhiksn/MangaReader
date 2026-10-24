@@ -42,7 +42,6 @@ function formatPagination({ page = 1, maxPage, hasNextPage } = {}) {
     pagination.maxPage = parsedMaxPage;
   }
 
-  pagination.hasNextPage = hasNext;
   pagination.nextPage = hasNext ? currentPage + 1 : null;
   pagination.prevPage = hasPrev ? currentPage - 1 : null;
 

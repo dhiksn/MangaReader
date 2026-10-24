@@ -14,6 +14,8 @@ async function fetchWithHeaders(url, options = {}) {
       ? 'application/json, text/plain, */*'
       : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
     ...options.headers,
   };
 

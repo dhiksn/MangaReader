@@ -97,22 +97,41 @@ class KomikuSource extends BaseSource {
       return null;
     }
 
-    return {
+    return formatPagination({
       page: pageNum,
       prevPage,
       nextPage,
-    };
+      hasNextPage: Boolean(nextPage),
+    });
   }
 
   /**
    * Get latest manga list from https://komiku.org/pustaka/
    * Scrapes underlying endpoint: https://api.komiku.org/manga/page/:page/?orderby=modified
+   * Supports query options: tipe (manga|manhua|manhwa), orderby, genre, status
    *
    * @param {number} [page=1] Page number
+   * @param {Object} [options={}] Filter options
    */
-  async getLatest(page = 1) {
+  async getLatest(page = 1, options = {}) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const url = `${this.apiBaseUrl}/manga/page/${pageNum}/?orderby=modified`;
+    const params = new URLSearchParams();
+    params.set('orderby', options.orderby || 'modified');
+
+    if (options.tipe) {
+      params.set('tipe', options.tipe);
+    }
+    if (options.genre) {
+      params.set('genre', options.genre);
+    }
+    if (options.status) {
+      params.set('status', options.status);
+    }
+
+    // Cache buster to bypass LiteSpeed Cache on api.komiku.org
+    params.set('_', Date.now());
+
+    const url = `${this.apiBaseUrl}/manga/page/${pageNum}/?${params.toString()}`;
     const html = await getHtml(url, {
       headers: { Referer: `${this.baseUrl}/pustaka/` },
     });
@@ -237,10 +256,29 @@ class KomikuSource extends BaseSource {
   /**
    * Get popular manga list from api.komiku.org.
    * @param {number} page Page number (default: 1)
+   * @param {Object} [options={}] Filter options (tipe, genre, status)
    */
-  async getPopular(page = 1) {
+  async getPopular(page = 1, options = {}) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const html = await getHtml(`${this.apiBaseUrl}/manga/page/${pageNum}/?orderby=meta_value_num`);
+    const params = new URLSearchParams();
+    params.set('orderby', 'meta_value_num');
+
+    if (options.tipe) {
+      params.set('tipe', options.tipe);
+    }
+    if (options.genre) {
+      params.set('genre', options.genre);
+    }
+    if (options.status) {
+      params.set('status', options.status);
+    }
+
+    // Cache buster to bypass LiteSpeed Cache on api.komiku.org
+    params.set('_', Date.now());
+
+    const html = await getHtml(`${this.apiBaseUrl}/manga/page/${pageNum}/?${params.toString()}`, {
+      headers: { Referer: `${this.baseUrl}/pustaka/` },
+    });
     const data = this._parseMangaList(html);
     const pagination = this._extractPagination(html, pageNum);
 

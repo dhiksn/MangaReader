@@ -67,7 +67,7 @@ router.get('/sources', (req, res) => {
 router.get('/sources/:source/popular', resolveSource, async (req, res, next) => {
   try {
     const page = validatePageParam(req.query.page);
-    const result = await req.mangaSource.getPopular(page);
+    const result = await req.mangaSource.getPopular(page, req.query);
     validatePageBounds(page, result);
     const pagination =
       result.pagination !== undefined
