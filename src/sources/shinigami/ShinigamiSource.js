@@ -6,7 +6,7 @@ const { formatRelativeTime } = require('../../utils/date');
 class ShinigamiSource extends BaseSource {
   constructor() {
     super('shinigami', 'Shinigami');
-    this.domain = 'id.shinigami.asia';
+    this.domain = '11.shinigami.asia';
     this.baseUrl = `https://${this.domain}`;
     this.icon = 'https://11.shinigami.asia/favicon.png';
     this.apiDomain = 'api.shngm.io/v1';
@@ -141,6 +141,8 @@ class ShinigamiSource extends BaseSource {
     }
 
     return {
+      id: item.manga_id || null,
+      manga_id: item.manga_id || null,
       title: item.title || null,
       slug,
       cover,
@@ -584,9 +586,12 @@ class ShinigamiSource extends BaseSource {
     };
 
     if (options.sort) {
-      const validSorts = ['latest', 'popularity', 'rating', 'bookmark'];
-      if (validSorts.includes(String(options.sort).toLowerCase())) {
-        params.sort = String(options.sort).toLowerCase();
+      const s = String(options.sort).toLowerCase();
+      if (s === 'oldest') {
+        params.sort = 'latest';
+        params.sort_order = 'asc';
+      } else if (['latest', 'popularity', 'popular', 'rating'].includes(s)) {
+        params.sort = s === 'popular' ? 'popularity' : s;
         params.sort_order = 'desc';
       }
     } else {
@@ -789,6 +794,8 @@ class ShinigamiSource extends BaseSource {
 
           const simSlug = this._slugify(sim.title) || sim.manga_id;
           similar.push({
+            id: sim.manga_id,
+            manga_id: sim.manga_id,
             title: sim.title,
             slug: simSlug,
             cover: sim.cover_portrait_url || sim.cover_image_url || null,
@@ -805,6 +812,9 @@ class ShinigamiSource extends BaseSource {
     }
 
     return {
+      id: mangaId,
+      manga_id: mangaId,
+      mangaId: mangaId,
       source: this.name,
       title,
       slug: itemSlug,
@@ -909,9 +919,9 @@ class ShinigamiSource extends BaseSource {
   getSupportedSorts() {
     return [
       { id: 'latest', name: 'Terbaru' },
+      { id: 'oldest', name: 'Terlama' },
       { id: 'popular', name: 'Populer' },
       { id: 'rating', name: 'Rating' },
-      { id: 'bookmark', name: 'Terfavorit' },
     ];
   }
 }

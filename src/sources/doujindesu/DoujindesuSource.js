@@ -12,6 +12,12 @@ class DoujindesuSource extends BaseSource {
     this.icon = 'https://pic.desu.xxx/content/web/1217a30e-c660-4212-9d80-548df7aa166d.webp';
     this.secret = 'dfdf72051dbfdc7d76889ebd31324e74';
     this.pageSize = 24;
+    this.sorts = [
+      { id: 'latest', name: 'Terbaru' },
+      { id: 'oldest', name: 'Terlama' },
+      { id: 'popular', name: 'Populer' },
+      { id: 'az', name: 'A-Z' },
+    ];
 
     // Genres cache in memory (24h)
     this._cachedGenres = null;
@@ -252,180 +258,175 @@ class DoujindesuSource extends BaseSource {
   }
 
   /**
-   * Get popular manga list from DoujinDesu.
-   * @param {number} [page=1] Page number
+   * Get supported sorts for DoujinDesu.
    */
-  async getPopular(page = 1) {
+  getSupportedSorts() {
+    return [
+      { id: 'latest', name: 'Terbaru' },
+      { id: 'oldest', name: 'Terlama' },
+      { id: 'popular', name: 'Populer' },
+      { id: 'az', name: 'A-Z' },
+    ];
+  }
+
+  /**
+   * General manga query supporting combined filters: sort, status, genre, type, search.
+   * Sourced from https://doujin.desu.xxx/explore.
+   * @param {number} [page=1] Page number
+   * @param {Object} [options={}] Filter and sorting options
+   */
+  async getList(page = 1, options = {}) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const offset = (pageNum - 1) * this.pageSize;
 
-    const rawList = await this._fetchApi('/api/manga', {
-      limit: this.pageSize,
-      offset,
-      sort: 'rating',
-    });
-
-    const data = Array.isArray(rawList) ? rawList.map((item) => this._mapMangaItem(item)) : [];
-    if (pageNum > 1 && data.length === 0) {
-      throw createNotFound(`Halaman ${pageNum} tidak ditemukan`, 'NOT_FOUND');
+    const rawSort = String(options.sort || options.orderby || 'latest').trim().toLowerCase();
+    let mappedSort;
+    switch (rawSort) {
+      case 'oldest':
+        mappedSort = 'oldest';
+        break;
+      case 'rating':
+      case 'popular':
+        mappedSort = 'rating';
+        break;
+      case 'az':
+      case 'title_asc':
+        mappedSort = 'title_asc';
+        break;
+      case 'latest':
+      case 'latest_chapter':
+      default:
+        mappedSort = 'latest_chapter';
+        break;
     }
 
-    const hasNextPage = data.length === this.pageSize;
+    const queryParams = {
+      limit: this.pageSize,
+      offset,
+      sort: mappedSort,
+    };
+
+    if (options.status) {
+      const s = String(options.status).trim().toLowerCase();
+      if (s === 'ongoing' || s === 'berjalan' || s === 'publishing') {
+        queryParams.status = 'publishing';
+      } else if (s === 'completed' || s === 'tamat' || s === 'end') {
+        queryParams.status = 'completed';
+      } else {
+        queryParams.status = s;
+      }
+    }
+
+    if (options.type) {
+      queryParams.type = String(options.type).trim().toLowerCase();
+    }
+
+    const rawGenre = options.genre || options.genres || options['genres[]'];
+    if (rawGenre) {
+      const genresList = Array.isArray(rawGenre)
+        ? rawGenre
+        : String(rawGenre)
+            .split(',')
+            .map((g) => g.trim())
+            .filter(Boolean);
+
+      if (genresList.length > 0) {
+        const resolvedSlugs = await Promise.all(genresList.map((g) => this._resolveGenreSlug(g)));
+        queryParams.genre = resolvedSlugs.join(',');
+      }
+    }
+
+    if (options.q || options.search) {
+      queryParams.search = String(options.q || options.search).trim();
+    }
+
+    const { data: rawList, total } = await this._fetchApi('/api/manga', queryParams, { withMeta: true });
+
+    const data = Array.isArray(rawList) ? rawList.map((item) => this._mapMangaItem(item)) : [];
+    const maxPage = total ? Math.ceil(total / this.pageSize) : null;
+
+    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
+      throw createNotFound(
+        `Halaman ${pageNum} tidak ditemukan${maxPage ? ` (maksimal halaman ${maxPage})` : ''}`,
+        'NOT_FOUND'
+      );
+    }
+
+    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
     const pagination = formatPagination({
       page: pageNum,
+      maxPage,
       hasNextPage,
     });
+
+    const exploreParams = new URLSearchParams();
+    if (queryParams.sort && queryParams.sort !== 'latest_chapter') exploreParams.set('sort', queryParams.sort);
+    if (queryParams.status) exploreParams.set('status', queryParams.status);
+    if (queryParams.type) exploreParams.set('type', queryParams.type);
+    if (queryParams.genre) exploreParams.set('genre', queryParams.genre);
+    if (queryParams.search) exploreParams.set('search', queryParams.search);
+    const exploreQuery = exploreParams.toString();
+    const fromUrl = `${this.baseUrl}/explore${exploreQuery ? `?${exploreQuery}` : ''}`;
 
     return {
       source: this.name,
+      sort: rawSort,
+      from: fromUrl,
       data,
       pagination,
       page: pageNum,
+      maxPage,
       hasNextPage,
     };
+  }
+
+  /**
+   * Get oldest manga list from DoujinDesu.
+   * Sourced from https://doujin.desu.xxx/explore?sort=oldest.
+   * @param {number} [page=1] Page number
+   * @param {Object} [options={}] Additional query options
+   */
+  async getOldest(page = 1, options = {}) {
+    return this.getList(page, { ...options, sort: 'oldest' });
+  }
+
+  /**
+   * Get popular manga list from DoujinDesu.
+   * @param {number} [page=1] Page number
+   * @param {Object} [options={}] Additional query options
+   */
+  async getPopular(page = 1, options = {}) {
+    return this.getList(page, { ...options, sort: 'rating' });
   }
 
   /**
    * Get latest updated manga list from DoujinDesu.
    * Sourced from https://doujin.desu.xxx/explore?sort=latest_chapter.
    * @param {number} [page=1] Page number
+   * @param {Object} [options={}] Additional query options
    */
-  async getLatest(page = 1) {
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const offset = (pageNum - 1) * this.pageSize;
-
-    const { data: rawList, total } = await this._fetchApi(
-      '/api/manga',
-      {
-        sort: 'latest_chapter',
-        limit: this.pageSize,
-        offset,
-      },
-      { withMeta: true }
-    );
-
-    const data = Array.isArray(rawList) ? rawList.map((item) => this._mapMangaItem(item)) : [];
-    const maxPage = total ? Math.ceil(total / this.pageSize) : null;
-
-    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
-      throw createNotFound(
-        `Halaman ${pageNum} tidak ditemukan${maxPage ? ` (maksimal halaman ${maxPage})` : ''}`,
-        'NOT_FOUND'
-      );
-    }
-
-    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
-    const pagination = formatPagination({
-      page: pageNum,
-      maxPage,
-      hasNextPage,
-    });
-
-    return {
-      source: this.name,
-      from: `${this.baseUrl}/explore?sort=latest_chapter`,
-      data,
-      pagination,
-      page: pageNum,
-      maxPage,
-      hasNextPage,
-    };
+  async getLatest(page = 1, options = {}) {
+    return this.getList(page, { ...options, sort: 'latest' });
   }
 
   /**
    * Get top rated manga list from DoujinDesu.
    * Sourced from https://doujin.desu.xxx/explore?sort=rating.
    * @param {number} [page=1] Page number
+   * @param {Object} [options={}] Additional query options
    */
-  async getRating(page = 1) {
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const offset = (pageNum - 1) * this.pageSize;
-
-    const { data: rawList, total } = await this._fetchApi(
-      '/api/manga',
-      {
-        limit: this.pageSize,
-        offset,
-        sort: 'rating',
-      },
-      { withMeta: true }
-    );
-
-    const data = Array.isArray(rawList) ? rawList.map((item) => this._mapMangaItem(item)) : [];
-    const maxPage = total ? Math.ceil(total / this.pageSize) : null;
-
-    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
-      throw createNotFound(
-        `Halaman ${pageNum} tidak ditemukan${maxPage ? ` (maksimal halaman ${maxPage})` : ''}`,
-        'NOT_FOUND'
-      );
-    }
-
-    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
-    const pagination = formatPagination({
-      page: pageNum,
-      maxPage,
-      hasNextPage,
-    });
-
-    return {
-      source: this.name,
-      sort: 'rating',
-      from: `${this.baseUrl}/explore?sort=rating`,
-      data,
-      pagination,
-      page: pageNum,
-      maxPage,
-      hasNextPage,
-    };
+  async getRating(page = 1, options = {}) {
+    return this.getList(page, { ...options, sort: 'rating' });
   }
 
   /**
    * Get alphabetical A-Z manga list from DoujinDesu.
    * Sourced from https://doujin.desu.xxx/explore?sort=title_asc.
    * @param {number} [page=1] Page number
+   * @param {Object} [options={}] Additional query options
    */
-  async getAz(page = 1) {
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const offset = (pageNum - 1) * this.pageSize;
-
-    const { data: rawList, total } = await this._fetchApi(
-      '/api/manga',
-      {
-        limit: this.pageSize,
-        offset,
-        sort: 'title_asc',
-      },
-      { withMeta: true }
-    );
-
-    const data = Array.isArray(rawList) ? rawList.map((item) => this._mapMangaItem(item)) : [];
-    const maxPage = total ? Math.ceil(total / this.pageSize) : null;
-
-    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
-      throw createNotFound(
-        `Halaman ${pageNum} tidak ditemukan${maxPage ? ` (maksimal halaman ${maxPage})` : ''}`,
-        'NOT_FOUND'
-      );
-    }
-
-    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
-    const pagination = formatPagination({
-      page: pageNum,
-      maxPage,
-      hasNextPage,
-    });
-
-    return {
-      source: this.name,
-      sort: 'az',
-      from: `${this.baseUrl}/explore?sort=title_asc`,
-      data,
-      pagination,
-      page: pageNum,
-      maxPage,
-      hasNextPage,
-    };
+  async getAz(page = 1, options = {}) {
+    return this.getList(page, { ...options, sort: 'az' });
   }
 
   /**
@@ -611,8 +612,7 @@ class DoujindesuSource extends BaseSource {
 
   /**
    * Get manga list filtered by type ('manga', 'manhwa', 'doujinshi').
-   * - 'doujinshi' / 'manga' maps to https://doujin.desu.xxx/doujin (gabungan doujinshi & manga)
-   * - 'manhwa' maps to https://doujin.desu.xxx/manhwa
+   * Matches https://doujin.desu.xxx/explore?type=:type.
    * @param {string} type Comic type
    * @param {number} [page=1] Page number
    */
@@ -626,52 +626,11 @@ class DoujindesuSource extends BaseSource {
       );
     }
 
-    const isDoujinOrManga = cleanType === 'doujinshi' || cleanType === 'manga';
-    const typeParam = isDoujinOrManga ? 'doujinshi,manga' : cleanType;
-    const fromUrl = isDoujinOrManga ? `${this.baseUrl}/doujin` : `${this.baseUrl}/${cleanType}`;
-
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const offset = (pageNum - 1) * this.pageSize;
-
-    const { data: rawList, total } = await this._fetchApi(
-      '/api/manga',
-      {
-        type: typeParam,
-        sort: 'latest_chapter',
-        limit: this.pageSize,
-        offset,
-      },
-      { withMeta: true }
-    );
-
-    const data = Array.isArray(rawList) ? rawList.map((item) => this._mapMangaItem(item)) : [];
-    const maxPage = total ? Math.ceil(total / this.pageSize) : null;
-
-    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
-      throw createNotFound(
-        `Halaman ${pageNum} tidak ditemukan untuk tipe '${cleanType}'${
-          maxPage ? ` (maksimal halaman ${maxPage})` : ''
-        }`,
-        'NOT_FOUND'
-      );
-    }
-
-    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
-    const pagination = formatPagination({
-      page: pageNum,
-      maxPage,
-      hasNextPage,
-    });
-
+    const result = await this.getList(page, { type: cleanType });
     return {
-      source: this.name,
+      ...result,
       type: cleanType,
-      from: fromUrl,
-      data,
-      pagination,
-      page: pageNum,
-      maxPage,
-      hasNextPage,
+      from: `${this.baseUrl}/explore?type=${cleanType}`,
     };
   }
 

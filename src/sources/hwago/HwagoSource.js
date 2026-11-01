@@ -422,7 +422,8 @@ class HwagoSource extends BaseSource {
     }
 
     const altTitle = $('p.text-surface-400.mb-4').text().trim() || null;
-    const cover = $('img[src*="cover"]').attr('src') || $('img.object-contain').attr('src') || null;
+    const coverEl = $('img[src*="cover"], img[data-src*="cover"]').first();
+    const cover = coverEl.attr('data-src') || coverEl.attr('src') || $('img.comic-backdrop-img').attr('src') || $('img.object-contain').attr('src') || null;
     const status = $('span.text-green-400, span.capitalize').first().text().trim().toLowerCase() || null;
     const type = $('span.text-base.font-bold.text-primary-400').text().trim().toLowerCase() || 'manhwa';
 

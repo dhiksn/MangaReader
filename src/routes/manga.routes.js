@@ -81,6 +81,7 @@ router.get('/sources/:source/popular', resolveSource, async (req, res, next) => 
     res.json({
       success: true,
       source: result.source || req.mangaSource.name,
+      ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
     });
@@ -117,9 +118,11 @@ router.get('/sources/:source/latest', resolveSource, async (req, res, next) => {
     res.json({
       success: true,
       source: result.source || req.mangaSource.name,
+      ...(result.sort ? { sort: result.sort } : {}),
       ...(result.from ? { from: result.from } : {}),
       ...(result.category ? { category: result.category } : {}),
       ...(result.orderby ? { orderby: result.orderby } : {}),
+      ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
     });
@@ -159,6 +162,7 @@ router.get('/sources/:source/rating', resolveSource, async (req, res, next) => {
       source: result.source || req.mangaSource.name,
       sort: result.sort || 'rating',
       ...(result.from ? { from: result.from } : {}),
+      ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
     });
@@ -198,6 +202,175 @@ router.get(['/sources/:source/az', '/sources/:source/alphabetical'], resolveSour
       source: result.source || req.mangaSource.name,
       sort: result.sort || 'az',
       ...(result.from ? { from: result.from } : {}),
+      ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
+      data: result.data || [],
+      ...(isPaginationValid(pagination) ? { pagination } : {}),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/sources/:source/za?page=1
+ * Get alphabetical Z-A manga list for a source.
+ */
+router.get('/sources/:source/za', resolveSource, async (req, res, next) => {
+  try {
+    if (typeof req.mangaSource.getZa !== 'function') {
+      throw createNotFound(
+        `Sumber '${req.mangaSource.name}' tidak menyediakan endpoint /za`,
+        'NOT_FOUND'
+      );
+    }
+
+    const page = validatePageParam(req.query.page);
+    const result = await req.mangaSource.getZa(page);
+    validatePageBounds(page, result);
+    const pagination =
+      result.pagination !== undefined
+        ? result.pagination
+        : formatPagination({
+            page,
+            maxPage: result.maxPage,
+            hasNextPage: result.hasNextPage,
+          });
+
+    res.json({
+      success: true,
+      source: result.source || req.mangaSource.name,
+      sort: result.sort || 'za',
+      ...(result.from ? { from: result.from } : {}),
+      ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
+      data: result.data || [],
+      ...(isPaginationValid(pagination) ? { pagination } : {}),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/sources/:source/oldest?page=1
+ * Get oldest manga list for a source.
+ * - DoujinDesu: /api/manga?sort=oldest
+ * - Shinigami: /manga/list?sort=latest&sort_order=asc
+ */
+router.get('/sources/:source/oldest', resolveSource, async (req, res, next) => {
+  try {
+    if (typeof req.mangaSource.getOldest !== 'function') {
+      if (
+        typeof req.mangaSource.getList === 'function' &&
+        req.mangaSource.getList !== BaseSource.prototype.getList
+      ) {
+        const page = validatePageParam(req.query.page);
+        const result = await req.mangaSource.getList(page, { ...req.query, sort: 'oldest' });
+        validatePageBounds(page, result);
+        const pagination =
+          result.pagination !== undefined
+            ? result.pagination
+            : formatPagination({
+                page,
+                maxPage: result.maxPage,
+                hasNextPage: result.hasNextPage,
+              });
+        return res.json({
+          success: true,
+          source: result.source || req.mangaSource.name,
+          sort: 'oldest',
+          ...(result.from ? { from: result.from } : {}),
+          data: result.data || [],
+          ...(isPaginationValid(pagination) ? { pagination } : {}),
+        });
+      }
+      throw createNotFound(
+        `Sumber '${req.mangaSource.name}' tidak menyediakan endpoint /oldest`,
+        'NOT_FOUND'
+      );
+    }
+
+    const page = validatePageParam(req.query.page);
+    const result = await req.mangaSource.getOldest(page, req.query);
+    validatePageBounds(page, result);
+    const pagination =
+      result.pagination !== undefined
+        ? result.pagination
+        : formatPagination({
+            page,
+            maxPage: result.maxPage,
+            hasNextPage: result.hasNextPage,
+          });
+
+    res.json({
+      success: true,
+      source: result.source || req.mangaSource.name,
+      sort: result.sort || 'oldest',
+      ...(result.from ? { from: result.from } : {}),
+      data: result.data || [],
+      ...(isPaginationValid(pagination) ? { pagination } : {}),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/sources/:source/newest?page=1
+ * Get newest added/released manga list for a source.
+ * - KomikTap: https://komiktap.info/manga/?order=latest
+ */
+router.get('/sources/:source/newest', resolveSource, async (req, res, next) => {
+  try {
+    if (typeof req.mangaSource.getNewest !== 'function') {
+      if (
+        typeof req.mangaSource.getList === 'function' &&
+        req.mangaSource.getList !== BaseSource.prototype.getList
+      ) {
+        const page = validatePageParam(req.query.page);
+        const result = await req.mangaSource.getList(page, { ...req.query, sort: 'newest' });
+        validatePageBounds(page, result);
+        const pagination =
+          result.pagination !== undefined
+            ? result.pagination
+            : formatPagination({
+                page,
+                maxPage: result.maxPage,
+                hasNextPage: result.hasNextPage,
+              });
+
+        return res.json({
+          success: true,
+          source: result.source || req.mangaSource.name,
+          sort: result.sort || 'newest',
+          ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
+          data: result.data || [],
+          ...(isPaginationValid(pagination) ? { pagination } : {}),
+        });
+      }
+
+      throw createNotFound(
+        `Sumber '${req.mangaSource.name}' tidak menyediakan endpoint /newest`,
+        'NOT_FOUND'
+      );
+    }
+
+    const page = validatePageParam(req.query.page);
+    const result = await req.mangaSource.getNewest(page, req.query);
+    validatePageBounds(page, result);
+    const pagination =
+      result.pagination !== undefined
+        ? result.pagination
+        : formatPagination({
+            page,
+            maxPage: result.maxPage,
+            hasNextPage: result.hasNextPage,
+          });
+
+    res.json({
+      success: true,
+      source: result.source || req.mangaSource.name,
+      sort: result.sort || 'newest',
+      ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
     });
@@ -240,6 +413,7 @@ router.get(['/sources/:source/bookmark', '/sources/:source/favorites'], resolveS
       source: result.source || req.mangaSource.name,
       sort: 'bookmark',
       ...(result.from ? { from: result.from } : {}),
+      ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
     });
@@ -286,6 +460,7 @@ router.get('/sources/:source/list', resolveSource, async (req, res, next) => {
       ...(result.status ? { status: result.status } : {}),
       ...(result.type ? { type: result.type } : {}),
       ...(result.genre ? { genre: result.genre } : {}),
+      ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
     });
@@ -341,6 +516,33 @@ router.get('/sources/:source/search', resolveSource, async (req, res, next) => {
  */
 router.get('/sources/:source/genres', resolveSource, async (req, res, next) => {
   try {
+    if (req.query.genre || req.query.genres) {
+      const genre = req.query.genre || req.query.genres;
+      const page = validatePageParam(req.query.page);
+      const result = await req.mangaSource.getByGenre(genre, page, req.query);
+      validatePageBounds(page, result);
+      const pagination =
+        result.pagination !== undefined
+          ? result.pagination
+          : formatPagination({
+              page,
+              maxPage: result.maxPage,
+              hasNextPage: result.hasNextPage,
+            });
+
+      return res.json({
+        success: true,
+        source: result.source || req.mangaSource.name,
+        genre: result.genre || genre,
+        ...(result.genres ? { genres: result.genres } : {}),
+        ...(result.sort ? { sort: result.sort } : {}),
+        ...(result.from ? { from: result.from } : {}),
+        ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
+        data: result.data || [],
+        ...(isPaginationValid(pagination) ? { pagination } : {}),
+      });
+    }
+
     const genres = await req.mangaSource.getGenres();
     res.json({
       success: true,
@@ -363,7 +565,7 @@ router.get('/sources/:source/genres/:genre', resolveSource, async (req, res, nex
       throw createBadRequest("Parameter 'genre' wajib diisi", 'INVALID_PARAMETER');
     }
     const page = validatePageParam(req.query.page);
-    const result = await req.mangaSource.getByGenre(genre, page);
+    const result = await req.mangaSource.getByGenre(genre, page, req.query);
     validatePageBounds(page, result);
     const pagination =
       result.pagination !== undefined
@@ -378,7 +580,10 @@ router.get('/sources/:source/genres/:genre', resolveSource, async (req, res, nex
       success: true,
       source: result.source || req.mangaSource.name,
       genre: result.genre || genre,
+      ...(result.genres ? { genres: result.genres } : {}),
+      ...(result.sort ? { sort: result.sort } : {}),
       ...(result.from ? { from: result.from } : {}),
+      ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
     });
@@ -411,10 +616,13 @@ router.get('/sources/:source/types', resolveSource, async (req, res, next) => {
 router.get('/sources/:source/types/:type', resolveSource, async (req, res, next) => {
   try {
     const rawType = String(req.params.type || '').trim().toLowerCase();
-    const validTypes =
+    const rawTypes =
       typeof req.mangaSource.getTypes === 'function'
         ? await req.mangaSource.getTypes()
         : ['manga', 'manhwa', 'manhua'];
+    const validTypes = Array.isArray(rawTypes)
+      ? rawTypes.map((t) => (typeof t === 'string' ? t.toLowerCase() : (t.id || t.slug || t.name || '').toLowerCase()))
+      : ['manga', 'manhwa', 'manhua'];
     if (!validTypes.includes(rawType)) {
       throw createBadRequest(
         `Tipe '${rawType}' tidak valid. Pilihan tersedia: ${validTypes.join(', ')}`,
@@ -422,7 +630,7 @@ router.get('/sources/:source/types/:type', resolveSource, async (req, res, next)
       );
     }
     const page = validatePageParam(req.query.page);
-    const result = await req.mangaSource.getByType(rawType, page);
+    const result = await req.mangaSource.getByType(rawType, page, req.query);
     validatePageBounds(page, result);
     const pagination =
       result.pagination !== undefined
@@ -438,6 +646,7 @@ router.get('/sources/:source/types/:type', resolveSource, async (req, res, next)
       source: result.source || req.mangaSource.name,
       type: result.type || rawType,
       ...(result.from ? { from: result.from } : {}),
+      ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
       data: result.data || [],
       ...(isPaginationValid(pagination) ? { pagination } : {}),
     });
@@ -457,7 +666,7 @@ router.get('/sources/:source/manga/:slug', resolveSource, async (req, res, next)
 
     // Strip internal-only fields from chapters before sending response
     if (Array.isArray(rest.chapters)) {
-      rest.chapters = rest.chapters.map(({ id, chapterNumber, ...pub }) => pub);
+      rest.chapters = rest.chapters.map(({ id, rawSlug, chapterNumber, ...pub }) => pub);
     }
 
     res.json({ success: true, source, data: rest });

@@ -3,6 +3,11 @@ const KomikuSource = require('./komiku/KomikuSource');
 const HwagoSource = require('./hwago/HwagoSource');
 const DoujindesuSource = require('./doujindesu/DoujindesuSource');
 const ShinigamiSource = require('./shinigami/ShinigamiSource');
+const KiryuuSource = require('./kiryuu/KiryuuSource');
+const KomiktapSource = require('./komiktap/KomiktapSource');
+const WestmangaSource = require('./westmanga/WestmangaSource');
+const KomikindoSource = require('./komikindo/KomikindoSource');
+const ApkomikSource = require('./apkomik/ApkomikSource');
 
 const sources = new Map();
 
@@ -47,6 +52,11 @@ registerSource(new KomikuSource());
 registerSource(new HwagoSource());
 registerSource(new DoujindesuSource());
 registerSource(new ShinigamiSource());
+registerSource(new KiryuuSource());
+registerSource(new KomiktapSource());
+registerSource(new WestmangaSource());
+registerSource(new KomikindoSource());
+registerSource(new ApkomikSource());
 
 module.exports = {
   registerSource,

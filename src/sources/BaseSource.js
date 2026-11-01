@@ -164,6 +164,9 @@ class BaseSource {
     if (typeof this.getAz === 'function') {
       sorts.push({ id: 'az', name: 'A-Z' });
     }
+    if (typeof this.getZa === 'function') {
+      sorts.push({ id: 'za', name: 'Z-A' });
+    }
     return sorts;
   }
 }

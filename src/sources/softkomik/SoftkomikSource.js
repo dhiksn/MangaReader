@@ -32,6 +32,9 @@ class SoftkomikSource extends BaseSource {
     // Recommendations cache
     this._cachedRecommendations = null;
     this._cachedRecommendationsExpiresAt = 0;
+
+    // Chapter mapping cache for unpadded to padded chapter resolution
+    this._chapterCache = new Map();
   }
 
   /**
@@ -257,7 +260,7 @@ class SoftkomikSource extends BaseSource {
         title: item.title,
         slug: slug,
         cover: gambar ? `${this.coverUrl}/${gambar}` : null,
-        status: item.status,
+        status: this._normalizeStatus(item.status),
         type: item.type,
         latestChapter: item.latest_chapter || item.latestChapter,
         _rawUpdatedAt: item.updated_at,
@@ -282,18 +285,77 @@ class SoftkomikSource extends BaseSource {
   }
 
   /**
-   * Get popular manga list from library.
+   * Normalize raw status strings to standard 'completed' or 'ongoing'
+   * @private
    */
-  async getPopular(page = 1) {
-    const pageNum = parseInt(page, 10) || 1;
-    const url = `${this.baseUrl}/komik/library?sortBy=popular&page=${pageNum}`;
-    const html = await getHtml(url, {
-      headers: { Referer: `${this.baseUrl}/` },
-    });
+  _normalizeStatus(rawStatus) {
+    if (!rawStatus) return rawStatus;
+    const s = String(rawStatus).toLowerCase();
+    if (['tamat', 'completed', 'finished', 'end'].includes(s)) return 'completed';
+    if (['ongoing', 'berjalan'].includes(s)) return 'ongoing';
+    return rawStatus;
+  }
+
+  /**
+   * Get filtered list / directory of manga from Softkomik library.
+   * @param {number} [page=1] Page number
+   * @param {Object} [options={}] Filter options (status, type, genre, sort, category)
+   */
+  async getList(page = 1, options = {}) {
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const resolvedStatus = (() => {
+      const s = String(options.status || '').toLowerCase();
+      if (['tamat', 'completed', 'finished', 'end'].includes(s)) return 'tamat';
+      if (['ongoing', 'berjalan'].includes(s)) return 'ongoing';
+      return null;
+    })();
+
+    // If purely latest with no status, genre, or type filter, delegate to getLatest
+    const isPureLatest =
+      (!options.sort || String(options.sort).toLowerCase() === 'latest' || String(options.sort).toLowerCase() === 'terbaru') &&
+      !resolvedStatus &&
+      !options.genre &&
+      !options.type;
+
+    if (isPureLatest) {
+      return this.getLatest(pageNum, options.category || 'all');
+    }
+
+    const queryParams = [`page=${pageNum}`];
+    const sortBy = String(options.sort || '').toLowerCase() === 'popular' ? 'popular' : 'terbaru';
+    queryParams.push(`sortBy=${sortBy}`);
+
+    if (resolvedStatus) {
+      queryParams.push(`status=${resolvedStatus}`);
+    }
+    if (options.type) {
+      queryParams.push(`type=${encodeURIComponent(String(options.type).toLowerCase())}`);
+    }
+    if (options.genre) {
+      const singleGenre = String(options.genre).split(',')[0].trim();
+      if (singleGenre) {
+        const resolvedGenre = await this._resolveGenreName(singleGenre);
+        queryParams.push(`genre=${encodeURIComponent(resolvedGenre)}`);
+      }
+    }
+
+    const headers = { Referer: `${this.baseUrl}/` };
+    if (this._authCookies) {
+      headers['Cookie'] = this._authCookies;
+    } else if (process.env.SOFTKOMIK_EMAIL && process.env.SOFTKOMIK_PASSWORD) {
+      try {
+        const cookies = await this._ensureAuthenticated();
+        if (cookies) headers['Cookie'] = cookies;
+      } catch (_) {}
+    }
+
+    const url = `${this.baseUrl}/komik/library?${queryParams.join('&')}`;
+    const html = await getHtml(url, { headers });
     const nextData = this._extractNextData(html);
-    const libData = nextData?.props?.pageProps?.libData;
-    const rawList = libData?.data || [];
-    const maxPage = libData?.maxPage || 1;
+    const pageProps = nextData?.props?.pageProps;
+    const libData = pageProps?.libData || pageProps?.data || {};
+    const rawList = libData.data || [];
+    const maxPage = libData.maxPage || 1;
 
     if (pageNum > 1 && (pageNum > maxPage || rawList.length === 0)) {
       throw createNotFound(
@@ -309,9 +371,12 @@ class SoftkomikSource extends BaseSource {
         title: item.title,
         slug: slug,
         cover: gambar ? `${this.coverUrl}/${gambar}` : null,
-        status: item.status,
+        status: this._normalizeStatus(item.status),
         type: item.type,
-        latestChapter: item.latest_chapter || item.latestChapter,
+        latestChapter: item.latest_chapter || (item.latestChapter ? String(item.latestChapter) : null),
+        rating: item.rating ? (typeof item.rating === 'object' ? item.rating.value : item.rating) : null,
+        updatedAt: formatRelativeTime(item.updated_at),
+        contentRating: item.contentRating || 'normal',
       };
     });
 
@@ -327,6 +392,13 @@ class SoftkomikSource extends BaseSource {
       page: pageNum,
       hasNextPage: pageNum < maxPage,
     };
+  }
+
+  /**
+   * Get popular manga list from library.
+   */
+  async getPopular(page = 1) {
+    return this.getList(page, { sort: 'popular' });
   }
 
   async search(query, page = 1) {
@@ -380,7 +452,7 @@ class SoftkomikSource extends BaseSource {
         title: item.title,
         slug: slug,
         cover: gambar ? `${this.coverUrl}/${gambar}` : null,
-        status: item.status || null,
+        status: this._normalizeStatus(item.status),
         type: item.type || null,
         latestChapter: item.latest_chapter || (item.latestChapter ? String(item.latestChapter) : null),
         updatedAt: formatRelativeTime(item.updated_at),
@@ -507,7 +579,7 @@ class SoftkomikSource extends BaseSource {
         title: item.title,
         slug: slug,
         cover: gambar ? `${this.coverUrl}/${gambar}` : null,
-        status: item.status,
+        status: this._normalizeStatus(item.status),
         type: item.type,
         latestChapter: item.latest_chapter || (item.latestChapter ? String(item.latestChapter) : null),
         updatedAt: formatRelativeTime(item.updated_at),
@@ -574,7 +646,7 @@ class SoftkomikSource extends BaseSource {
         title: item.title,
         slug: slug,
         cover: gambar ? `${this.coverUrl}/${gambar}` : null,
-        status: item.status,
+        status: this._normalizeStatus(item.status),
         type: item.type,
         latestChapter: item.latest_chapter || (item.latestChapter ? String(item.latestChapter) : null),
         updatedAt: formatRelativeTime(item.updated_at),
@@ -613,14 +685,25 @@ class SoftkomikSource extends BaseSource {
     const chapterData = decrypted?.chapterData || {};
 
     const rawChapters = chapterData?.chapter || [];
+    const chapterMap = new Map();
     const chapters = rawChapters.map((ch) => {
-      const chStr = ch.chapter || '';
+      const rawCh = ch.chapter || '';
+      const displayNum = rawCh.replace(/^0+(?=\d)/, '');
+      const cleanCh = displayNum || rawCh;
+
+      chapterMap.set(cleanCh, rawCh);
+      chapterMap.set(rawCh, rawCh);
+      chapterMap.set(`chapter-${cleanCh}`, rawCh);
+      chapterMap.set(`chapter-${rawCh}`, rawCh);
+
       return {
-        chapter: chStr,
-        title: `Chapter ${chStr}`,
-        slug: `${cleanSlug}/${chStr}`,
+        chapter: cleanCh,
+        title: `Chapter ${cleanCh}`,
+        slug: `${cleanSlug}/${cleanCh}`,
       };
     });
+
+    this._chapterCache.set(cleanSlug, chapterMap);
 
     const gambar = (data.gambar || '').replace(/^\//, '');
     const similar = await this._getRecommendations(cleanSlug, data.type, data.Genre);
@@ -633,7 +716,7 @@ class SoftkomikSource extends BaseSource {
       synopsis: data.sinopsis,
       author: data.author,
       year: data.tahun,
-      status: data.status,
+      status: this._normalizeStatus(data.status),
       type: data.type,
       genres: data.Genre || [],
       rating: data.rating ? Math.round(data.rating.value * 100) / 100 : null,
@@ -701,11 +784,37 @@ class SoftkomikSource extends BaseSource {
 
   async getPages(slug, chapter, cdn = 'cdn1') {
     const cleanSlug = slug.replace(/^\/+|\/+$/g, '').split('/')[0];
-    const cleanChapter = String(chapter).replace(/^\/+|\/+$/g, '');
+    const rawChapter = String(chapter).replace(/^\/+|\/+$/g, '').split('/').pop();
     const cleanCdn = String(cdn || 'cdn1').toLowerCase();
     const activeCdnBase = this.cdnServers[cleanCdn] || this.cdnServers.cdn1;
 
-    const url = `${this.baseUrl}/${cleanSlug}/chapter/${cleanChapter}`;
+    let targetChapter = rawChapter;
+    let chapterMap = this._chapterCache.get(cleanSlug);
+
+    if (!chapterMap) {
+      try {
+        await this.getDetails(cleanSlug);
+        chapterMap = this._chapterCache.get(cleanSlug);
+      } catch (_) {}
+    }
+
+    if (chapterMap && chapterMap.has(rawChapter)) {
+      targetChapter = chapterMap.get(rawChapter);
+    } else {
+      const numMatch = rawChapter.match(/^([0-9]+)(\.[0-9]+)?$/);
+      if (numMatch) {
+        const intPart = numMatch[1];
+        const decPart = numMatch[2] || '';
+        const padded3 = `${intPart.padStart(3, '0')}${decPart}`;
+        if (chapterMap && chapterMap.has(padded3)) {
+          targetChapter = chapterMap.get(padded3);
+        } else {
+          targetChapter = padded3;
+        }
+      }
+    }
+
+    const url = `${this.baseUrl}/${cleanSlug}/chapter/${targetChapter}`;
 
     const html = await getHtml(url, {
       headers: { Referer: `${this.baseUrl}/` },
@@ -729,6 +838,8 @@ class SoftkomikSource extends BaseSource {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
 
+    const displayChapter = rawChapter.replace(/^0+(?=\d)/, '') || rawChapter;
+
     const pages = imgList.map((rawPath, index) => {
       const cleanPath = String(rawPath).trim().replace(/^\/+/, '').replace(/\/{2,}/g, '/');
       const directUrl = `${activeCdnBase}/${cleanPath}?id=${this.imageToken}`;
@@ -743,9 +854,9 @@ class SoftkomikSource extends BaseSource {
 
     return {
       source: this.name,
-      title: `${mangaTitle} Chapter ${cleanChapter}`,
+      title: `${mangaTitle} Chapter ${displayChapter}`,
       slug: cleanSlug,
-      chapter: cleanChapter,
+      chapter: displayChapter,
       currentCdn: cleanCdn in this.cdnServers ? cleanCdn : 'cdn1',
       availableCdns: [
         { id: 'cdn1', name: 'CDN 1 (image.komik.im)' },

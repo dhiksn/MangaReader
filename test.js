@@ -475,7 +475,12 @@ async function runTests() {
     console.log(`DoujinDesu Latest: ${jsonDoujinLatest.data.length} items. First: "${jsonDoujinLatest.data[0]?.title}"`);
     if (!jsonDoujinLatest.data.length) throw new Error('DoujinDesu latest empty');
 
-    // 14c. Rating & Az
+    // 14c. Oldest, Rating & Az
+    const resDoujinOldest = await fetch(`http://localhost:${port}/api/sources/doujindesu/oldest?page=1`);
+    const jsonDoujinOldest = await resDoujinOldest.json();
+    console.log(`DoujinDesu Oldest: ${jsonDoujinOldest.data.length} items. First: "${jsonDoujinOldest.data[0]?.title}"`);
+    if (!jsonDoujinOldest.data.length) throw new Error('DoujinDesu oldest empty');
+
     const resDoujinRating = await fetch(`http://localhost:${port}/api/sources/doujindesu/rating?page=1`);
     const jsonDoujinRating = await resDoujinRating.json();
     console.log(`DoujinDesu Rating: ${jsonDoujinRating.data.length} items. First: "${jsonDoujinRating.data[0]?.title}"`);
@@ -635,7 +640,106 @@ async function runTests() {
     }
     console.log(`✓ Successfully verified: Shinigami chapter pages and proxy image fetching`);
 
-    console.log('✓ All Error response formats, Security, Pagination, Genre, Type, Softkomik, Komiku, Hwago, DoujinDesu, and Shinigami source tests verified successfully!');
+    // 16. KomikTap Source Tests
+    console.log('\n--- 16. Testing KomikTap Source ---');
+    const resKomiktapLatest = await fetch(`http://localhost:${port}/api/sources/komiktap/latest?page=1`);
+    const jsonKomiktapLatest = await resKomiktapLatest.json();
+    console.log(`KomikTap Latest (order=latest): ${jsonKomiktapLatest.data.length} items. First: "${jsonKomiktapLatest.data[0]?.title}" (${jsonKomiktapLatest.data[0]?.slug})`);
+    if (!jsonKomiktapLatest.data || jsonKomiktapLatest.data.length === 0 || jsonKomiktapLatest.orderby !== 'latest') throw new Error('KomikTap latest list empty or orderby mismatch');
+
+    const resKomiktapNewest = await fetch(`http://localhost:${port}/api/sources/komiktap/newest?page=1`);
+    const jsonKomiktapNewest = await resKomiktapNewest.json();
+    console.log(`KomikTap Newest (order=update): ${jsonKomiktapNewest.data.length} items. First: "${jsonKomiktapNewest.data[0]?.title}"`);
+    if (!jsonKomiktapNewest.data || jsonKomiktapNewest.data.length === 0 || jsonKomiktapNewest.orderby !== 'update') throw new Error('KomikTap newest list empty or orderby mismatch');
+
+    const resKomiktapPopular = await fetch(`http://localhost:${port}/api/sources/komiktap/popular?page=1`);
+    const jsonKomiktapPopular = await resKomiktapPopular.json();
+    console.log(`KomikTap Popular: ${jsonKomiktapPopular.data.length} items. First: "${jsonKomiktapPopular.data[0]?.title}"`);
+    if (!jsonKomiktapPopular.data || jsonKomiktapPopular.data.length === 0) throw new Error('KomikTap popular list empty');
+
+    const sampleKomiktapSlug = jsonKomiktapPopular.data[0].slug;
+    const resKomiktapDetails = await fetch(`http://localhost:${port}/api/sources/komiktap/manga/${sampleKomiktapSlug}`);
+    const jsonKomiktapDetails = await resKomiktapDetails.json();
+    console.log(`KomikTap Details: "${jsonKomiktapDetails.data.title}", Chapters: ${jsonKomiktapDetails.data.chapters.length}`);
+    if (!jsonKomiktapDetails.data.chapters.length) throw new Error('KomikTap chapters empty');
+
+    const sampleKomiktapCh = jsonKomiktapDetails.data.chapters[0].slug;
+    const resKomiktapPages = await fetch(`http://localhost:${port}/api/sources/komiktap/chapter/${sampleKomiktapSlug}/${sampleKomiktapCh}`);
+    const jsonKomiktapPages = await resKomiktapPages.json();
+    console.log(`KomikTap Pages: ${jsonKomiktapPages.data.pages.length} pages. First proxy: ${jsonKomiktapPages.data.pages[0]?.url}`);
+    if (!jsonKomiktapPages.data.pages.length) throw new Error('KomikTap pages empty');
+
+    const resProxyKomiktapImg = await fetch(jsonKomiktapPages.data.pages[0].url);
+    console.log(`KomikTap Image Proxy: status=${resProxyKomiktapImg.status}, type=${resProxyKomiktapImg.headers.get('content-type')}`);
+    if (resProxyKomiktapImg.status !== 200 || !resProxyKomiktapImg.headers.get('content-type')?.includes('image')) {
+      throw new Error('KomikTap image proxy fetch failed');
+    }
+
+    // 16b. Multi-genre test (big-ass,milf with order=latest)
+    const resKomiktapMulti = await fetch(`http://localhost:${port}/api/sources/komiktap/genres/big-ass,milf?order=latest`);
+    const jsonKomiktapMulti = await resKomiktapMulti.json();
+    console.log(`KomikTap Multi-Genre (big-ass,milf): ${jsonKomiktapMulti.data.length} items. First: "${jsonKomiktapMulti.data[0]?.title}"`);
+    if (!jsonKomiktapMulti.data || jsonKomiktapMulti.data.length === 0 || jsonKomiktapMulti.orderby !== 'latest') {
+      throw new Error('KomikTap multi-genre test failed');
+    }
+    console.log(`✓ Successfully verified: KomikTap latest, newest, popular, multi-genre (big-ass+milf), details, chapter pages, and image proxying`);
+
+    // 17. WestManga Source Tests
+    console.log('\n--- 17. Testing WestManga Source Routes ---');
+    const resWmLatest = await fetch(`http://localhost:${port}/api/sources/westmanga/latest?page=1`);
+    const jsonWmLatest = await resWmLatest.json();
+    console.log(`WestManga Latest: ${jsonWmLatest.data.length} items. First: "${jsonWmLatest.data[0]?.title}"`);
+    if (!jsonWmLatest.data || jsonWmLatest.data.length === 0) throw new Error('WestManga latest list empty');
+
+    const resWmPopular = await fetch(`http://localhost:${port}/api/sources/westmanga/popular?page=1`);
+    const jsonWmPopular = await resWmPopular.json();
+    console.log(`WestManga Popular: ${jsonWmPopular.data.length} items. First: "${jsonWmPopular.data[0]?.title}"`);
+    if (!jsonWmPopular.data || jsonWmPopular.data.length === 0) throw new Error('WestManga popular list empty');
+
+    const resWmNewest = await fetch(`http://localhost:${port}/api/sources/westmanga/newest?page=1`);
+    const jsonWmNewest = await resWmNewest.json();
+    console.log(`WestManga Newest: ${jsonWmNewest.data.length} items. First: "${jsonWmNewest.data[0]?.title}"`);
+    if (!jsonWmNewest.data || jsonWmNewest.data.length === 0) throw new Error('WestManga newest list empty');
+
+    const resWmAz = await fetch(`http://localhost:${port}/api/sources/westmanga/az?page=1`);
+    const jsonWmAz = await resWmAz.json();
+    console.log(`WestManga A-Z: ${jsonWmAz.data.length} items. First: "${jsonWmAz.data[0]?.title}"`);
+    if (!jsonWmAz.data || jsonWmAz.data.length === 0) throw new Error('WestManga A-Z list empty');
+
+    const resWmSearch = await fetch(`http://localhost:${port}/api/sources/westmanga/search?q=martial`);
+    const jsonWmSearch = await resWmSearch.json();
+    console.log(`WestManga Search ("martial"): ${jsonWmSearch.data.length} items. First: "${jsonWmSearch.data[0]?.title}"`);
+    if (!jsonWmSearch.data || jsonWmSearch.data.length === 0) throw new Error('WestManga search list empty');
+
+    const resWmGenres = await fetch(`http://localhost:${port}/api/sources/westmanga/genres`);
+    const jsonWmGenres = await resWmGenres.json();
+    console.log(`WestManga Genres: ${jsonWmGenres.data.length} genres available.`);
+    if (!jsonWmGenres.data || jsonWmGenres.data.length === 0) throw new Error('WestManga genres list empty');
+
+    const resWmByGenre = await fetch(`http://localhost:${port}/api/sources/westmanga/genres/action?page=1`);
+    const jsonWmByGenre = await resWmByGenre.json();
+    console.log(`WestManga By Genre (action): ${jsonWmByGenre.data.length} items. First: "${jsonWmByGenre.data[0]?.title}"`);
+    if (!jsonWmByGenre.data || jsonWmByGenre.data.length === 0) throw new Error('WestManga by genre list empty');
+
+    const resWmDetails = await fetch(`http://localhost:${port}/api/sources/westmanga/manga/martial-peak`);
+    const jsonWmDetails = await resWmDetails.json();
+    console.log(`WestManga Details: "${jsonWmDetails.data.title}", Chapters: ${jsonWmDetails.data.chapters.length}`);
+    if (!jsonWmDetails.data.chapters.length) throw new Error('WestManga chapters empty');
+
+    const sampleWmCh = jsonWmDetails.data.chapters[0].slug;
+    const resWmPages = await fetch(`http://localhost:${port}/api/sources/westmanga/chapter/martial-peak/${sampleWmCh}`);
+    const jsonWmPages = await resWmPages.json();
+    console.log(`WestManga Pages: ${jsonWmPages.data.pages.length} pages. First proxy: ${jsonWmPages.data.pages[0]?.url}`);
+    if (!jsonWmPages.data.pages.length) throw new Error('WestManga pages empty');
+
+    const resProxyWmImg = await fetch(jsonWmPages.data.pages[0].url);
+    console.log(`WestManga Image Proxy: status=${resProxyWmImg.status}, type=${resProxyWmImg.headers.get('content-type')}`);
+    if (resProxyWmImg.status !== 200 || !resProxyWmImg.headers.get('content-type')?.includes('image')) {
+      throw new Error('WestManga image proxy fetch failed');
+    }
+    console.log(`✓ Successfully verified: WestManga latest, popular, newest, az, search, genres, by genre, details, chapter pages, and image proxying`);
+
+    console.log('✓ All Error response formats, Security, Pagination, Genre, Type, Softkomik, Komiku, Hwago, DoujinDesu, Shinigami, KomikTap, and WestManga source tests verified successfully!');
   } finally {
     server.close();
   }

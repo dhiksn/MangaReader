@@ -43,7 +43,27 @@ router.get('/image', async (req, res, next) => {
         targetUrl.hostname.includes('shngm') ||
         targetUrl.hostname.includes('shinigami')
       ) {
-        referer = 'https://id.shinigami.asia/';
+        referer = 'https://11.shinigami.asia/';
+      } else if (
+        targetUrl.hostname.includes('kiryuu')
+      ) {
+        referer = 'https://v7.kiryuu.to/';
+      } else if (
+        targetUrl.hostname.includes('komiktap') ||
+        targetUrl.hostname.includes('uqni.net') ||
+        targetUrl.hostname.includes('cdnasu')
+      ) {
+        referer = 'https://komiktap.info/';
+      } else if (
+        targetUrl.hostname.includes('westmanga')
+      ) {
+        referer = 'https://v1.westmanga.my/';
+      } else if (
+        targetUrl.hostname.includes('fajarsumatera') ||
+        targetUrl.hostname.includes('linksaya') ||
+        targetUrl.hostname.includes('komikindo')
+      ) {
+        referer = 'https://2.komikindo.shop/';
       } else {
         referer = `${targetUrl.protocol}//${targetUrl.hostname}/`;
       }
@@ -55,7 +75,9 @@ router.get('/image', async (req, res, next) => {
       referer.endsWith('.org') ||
       referer.endsWith('.id') ||
       referer.endsWith('.xxx') ||
-      referer.endsWith('.asia')
+      referer.endsWith('.asia') ||
+      referer.endsWith('.to') ||
+      referer.endsWith('.info')
     ) {
       referer += '/';
     }
