@@ -7,7 +7,7 @@ class BacakomikSource extends BaseSource {
   constructor() {
     super('bacakomik', 'BacaKomik');
     this.baseUrl = 'https://bacakomik.my';
-    this.icon = `${this.baseUrl}/favicon.ico`;
+    this.icon = `https://i2.wp.com/bacakomik.my/wp-content/uploads/2023/11/Ikon-HD-Bacakomik-e1700846109308.png?w=140`;
 
     // Genres cache
     this._cachedGenres = null;
