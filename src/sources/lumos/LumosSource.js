@@ -345,16 +345,15 @@ class LumosSource extends BaseSource {
 
       const chTitle = $(el).find('span').first().text().trim() || `Chapter ${$(el).attr('data-chapter')}`;
       const chNum = $(el).attr('data-chapter')?.trim() || '';
-      // Date: span.tabular-nums — strip leading "0" or noise
+      // Date: span.tabular-nums — strip leading noise number
       const rawDate = $(el).find('span.tabular-nums, span[class*="tabular-nums"]').text().trim()
-        .replace(/^\d+\s+/, ''); // strip leading number
-      const date = this._parseRelativeDate(rawDate);
+        .replace(/^\d+\s+/, '').trim();
 
       chapters.push({
         title: chTitle,
         slug: `${this.baseUrl}${href}`,
         endpoint: `/api/sources/${this.name}/chapter/${encodeURIComponent(`${this.baseUrl}${href}`)}`,
-        date: date || rawDate || null,
+        date: rawDate || null,
       });
     });
 

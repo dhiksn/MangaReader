@@ -10,6 +10,8 @@ const KomikindoSource = require('./komikindo/KomikindoSource');
 const ApkomikSource = require('./apkomik/ApkomikSource');
 const BacakomikSource = require('./bacakomik/BacakomikSource');
 const LumosSource = require('./lumos/LumosSource');
+const PixhentaiSource = require('./pixhentai/PixhentaiSource');
+const HolotoonSource = require('./holotoon/HolotoonSource');
 
 const sources = new Map();
 
@@ -61,6 +63,9 @@ registerSource(new KomikindoSource());
 registerSource(new ApkomikSource());
 registerSource(new BacakomikSource());
 registerSource(new LumosSource());
+registerSource(new PixhentaiSource());
+registerSource(new HolotoonSource());
+registerSource(new HolotoonSource());
 
 module.exports = {
   registerSource,
