@@ -17,7 +17,7 @@ class BacakomikSource extends BaseSource {
   getSupportedSorts() {
     return [
       { id: 'latest', name: 'Terbaru' },
-      { id: 'newest', name: 'Terbaru Ditambahkan' },
+      { id: 'newest', name: 'Diperbarui' },
       { id: 'popular', name: 'Populer' },
       { id: 'az', name: 'A-Z' },
       { id: 'za', name: 'Z-A' },
