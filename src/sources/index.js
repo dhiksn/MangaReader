@@ -8,6 +8,7 @@ const KomiktapSource = require('./komiktap/KomiktapSource');
 const WestmangaSource = require('./westmanga/WestmangaSource');
 const KomikindoSource = require('./komikindo/KomikindoSource');
 const ApkomikSource = require('./apkomik/ApkomikSource');
+const BacakomikSource = require('./bacakomik/BacakomikSource');
 
 const sources = new Map();
 
@@ -57,6 +58,7 @@ registerSource(new KomiktapSource());
 registerSource(new WestmangaSource());
 registerSource(new KomikindoSource());
 registerSource(new ApkomikSource());
+registerSource(new BacakomikSource());
 
 module.exports = {
   registerSource,

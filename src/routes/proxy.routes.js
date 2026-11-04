@@ -33,7 +33,7 @@ router.get('/image', async (req, res, next) => {
       } else if (targetUrl.hostname.includes('komiku')) {
         referer = 'https://komiku.org/';
       } else if (targetUrl.hostname.includes('hwago') || targetUrl.hostname.includes('imgsvr.my.id')) {
-        referer = 'https://02.hwago.xyz/';
+        referer = 'https://01.hwago.com/';
       } else if (
         targetUrl.hostname.includes('desu') ||
         targetUrl.hostname.includes('doujin')

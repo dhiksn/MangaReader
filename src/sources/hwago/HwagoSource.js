@@ -7,9 +7,9 @@ const { formatPagination } = require('../../utils/responseHelper');
 class HwagoSource extends BaseSource {
   constructor() {
     super('hwago', 'Hwago');
-    this.domain = '02.hwago.xyz';
+    this.domain = '01.hwago.com';
     this.baseUrl = `https://${this.domain}`;
-    this.icon = 'https://02.hwago.xyz/icons/icon-192x192.png';
+    this.icon = 'https://01.hwago.com/icons/icon-144x144.png';
 
     // Genres cache in memory (24h)
     this._cachedGenres = null;
