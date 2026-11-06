@@ -148,6 +148,16 @@ class BacakomikSource extends BaseSource {
     let extra = '';
     if (status) extra += `&status=${encodeURIComponent(status)}`;
     if (type) extra += `&type=${encodeURIComponent(type)}`;
+    if (options.genre) {
+      const genres = await this.getGenres();
+      const keys = String(options.genre).split(',').map((g) => g.trim().toLowerCase()).filter(Boolean);
+      for (const key of keys) {
+        const match = genres.find(
+          (g) => g.slug === key || g.name.toLowerCase() === key || g.id === key,
+        );
+        if (match) extra += `&genre%5B%5D=${encodeURIComponent(match.id)}`;
+      }
+    }
 
     const url = this._buildListUrl(order, pageNum, extra);
     const { data, maxPage, hasNextPage } = await this._fetchListing(url, pageNum);

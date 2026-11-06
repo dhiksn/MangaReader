@@ -17,6 +17,8 @@ class PixhentaiSource extends BaseSource {
   getSupportedSorts() {
     return [
       { id: 'latest', name: 'Terbaru' },
+      { id: 'indonesia', name: 'Indonesia' },
+      { id: 'english', name: 'English' },
     ];
   }
  
@@ -53,7 +55,7 @@ class PixhentaiSource extends BaseSource {
  
       // Strip thumbnail dimensions (-200x285) to get full-size cover
       const rawCover = $(el).find('img').first().attr('src') || '';
-      const cover = rawCover.replace(/-\d+x\d+(\.[a-zA-Z0-9]+)$/, '$1') || null;
+      const cover = rawCover || null;
  
       items.push({ title, slug, cover });
     });
@@ -70,6 +72,33 @@ class PixhentaiSource extends BaseSource {
   }
  
   // ─── Public endpoints ────────────────────────────────────────────────────────
+ 
+
+ 
+  async getList(page = 1, options = {}) {
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const { sort, genre } = options;
+    if (genre) {
+      return this.getByGenre(genre, pageNum);
+    }
+    const langGenre = (() => {
+      const s = String(sort || '').toLowerCase().trim();
+      if (s === 'indonesia' || s === 'id') return 'komik-hentai-indonesia';
+      if (s === 'english' || s === 'en') return 'english-translated';
+      return null;
+    })();
+    const url = langGenre
+      ? (pageNum <= 1 ? `${this.baseUrl}/genre/${langGenre}/` : `${this.baseUrl}/genre/${langGenre}/page/${pageNum}/`)
+      : (pageNum <= 1 ? `${this.baseUrl}/` : `${this.baseUrl}/page/${pageNum}/`);
+    const { data, maxPage, hasNextPage } = await this._fetchListing(url, pageNum);
+    return {
+      source: this.name,
+      page: pageNum,
+      maxPage,
+      hasNextPage,
+      data,
+    };
+  }
  
   async getLatest(page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -110,6 +139,8 @@ class PixhentaiSource extends BaseSource {
       const match = href.match(/\/genre\/([^/]+)\/?$/);
       if (!match) return;
       const slug = match[1];
+      // Skip language genres
+      if (['english-translated', 'komik-hentai-indonesia'].includes(slug)) return;
       if (seen.has(slug)) return;
       seen.add(slug);
       const name = $(el).text().trim();
@@ -190,13 +221,13 @@ class PixhentaiSource extends BaseSource {
       // no-op, kept for future use
     });
  
-    // Genres/tags specific to this manga — found in post footer tags section
+    // Genres — from .meta-cat (post-specific categories), only top-level genre slugs
     const genres = [];
     const seenGenres = new Set();
-    // Collect from a[rel="tag"] (tags) and specific genre links in the post body
-    $('a[rel="tag"], a[href*="/tag/"]').each((_, el) => {
+    $('.meta-cat a[href*="/genre/"]').each((_, el) => {
       const href = $(el).attr('href') || '';
-      const match = href.match(/\/(?:genre|tag)\/([^/]+)\/?$/);
+      // Only top-level: /genre/{slug}/ — skip sub-paths like /genre/foo/bar/
+      const match = href.match(/\/genre\/([^/]+)\/?$/);
       const genreSlug = match ? match[1] : null;
       const name = $(el).text().trim();
       if (!name || !genreSlug || seenGenres.has(genreSlug)) return;
@@ -238,7 +269,7 @@ class PixhentaiSource extends BaseSource {
       const relTitle = a.text().trim();
       if (!relSlug || !relTitle) return;
       const rawRelCover = $(el).find('.related-thumb img').first().attr('src') || '';
-      const relCover = rawRelCover.replace(/-\d+x\d+(\.[a-zA-Z0-9]+)$/, '$1') || null;
+      const relCover = rawRelCover || null;
       related.push({ title: relTitle, slug: relSlug, cover: relCover });
     });
 

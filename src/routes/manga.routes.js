@@ -146,7 +146,7 @@ router.get('/sources/:source/rating', resolveSource, async (req, res, next) => {
     }
 
     const page = validatePageParam(req.query.page);
-    const result = await req.mangaSource.getRating(page);
+    const result = await req.mangaSource.getRating(page, req.query);
     validatePageBounds(page, result);
     const pagination =
       result.pagination !== undefined
@@ -186,7 +186,7 @@ router.get(['/sources/:source/az', '/sources/:source/alphabetical'], resolveSour
     }
 
     const page = validatePageParam(req.query.page);
-    const result = await req.mangaSource.getAz(page);
+    const result = await req.mangaSource.getAz(page, req.query);
     validatePageBounds(page, result);
     const pagination =
       result.pagination !== undefined
@@ -225,7 +225,7 @@ router.get('/sources/:source/za', resolveSource, async (req, res, next) => {
     }
 
     const page = validatePageParam(req.query.page);
-    const result = await req.mangaSource.getZa(page);
+    const result = await req.mangaSource.getZa(page, req.query);
     validatePageBounds(page, result);
     const pagination =
       result.pagination !== undefined
@@ -484,7 +484,7 @@ router.get('/sources/:source/search', resolveSource, async (req, res, next) => {
     }
     const query = rawQuery.trim();
     const page = validatePageParam(req.query.page);
-    const result = await req.mangaSource.search(query, page);
+    const result = await req.mangaSource.search(query, page, req.query);
     validatePageBounds(page, result);
     const pagination =
       result.pagination !== undefined
@@ -500,6 +500,8 @@ router.get('/sources/:source/search', resolveSource, async (req, res, next) => {
       success: !isEmpty,
       source: result.source || req.mangaSource.name,
       query,
+      ...(result.sort ? { sort: result.sort } : req.query.sort ? { sort: req.query.sort } : {}),
+      ...(result.orderby ? { orderby: result.orderby, order: result.order } : {}),
       data: isEmpty
         ? { message: `Tidak ada hasil untuk "${query}"` }
         : result.data,

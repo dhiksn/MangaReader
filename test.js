@@ -739,6 +739,31 @@ async function runTests() {
     }
     console.log(`✓ Successfully verified: WestManga latest, popular, newest, az, search, genres, by genre, details, chapter pages, and image proxying`);
 
+    // --- Voratoon Test ---
+    console.log('\n--- Testing Voratoon via API ---');
+    const resVtLatest = await fetch(`http://localhost:${port}/api/sources/voratoon/latest?page=1`);
+    const jsonVtLatest = await resVtLatest.json();
+    console.log(`VoraToon Latest: ${jsonVtLatest.data.length} items. First: "${jsonVtLatest.data[0]?.title}" (${jsonVtLatest.data[0]?.slug})`);
+    if (!jsonVtLatest.data || jsonVtLatest.data.length === 0) throw new Error('VoraToon latest empty');
+
+    const resVtDetails = await fetch(`http://localhost:${port}/api/sources/voratoon/manga/nano-machine`);
+    const jsonVtDetails = await resVtDetails.json();
+    console.log(`VoraToon Details: "${jsonVtDetails.data.title}", Chapters: ${jsonVtDetails.data.chapters.length}`);
+    if (!jsonVtDetails.data.chapters.length) throw new Error('VoraToon chapters empty');
+
+    const sampleVtCh = jsonVtDetails.data.chapters[jsonVtDetails.data.chapters.length - 1].slug;
+    const resVtPages = await fetch(`http://localhost:${port}/api/sources/voratoon/chapter/nano-machine/${sampleVtCh}`);
+    const jsonVtPages = await resVtPages.json();
+    console.log(`VoraToon Pages: ${jsonVtPages.data.pages.length} pages. First image: ${jsonVtPages.data.pages[0]?.url}`);
+    if (!jsonVtPages.data.pages.length) throw new Error('VoraToon pages empty');
+
+    const resVtSearch = await fetch(`http://localhost:${port}/api/sources/voratoon/search?q=kanojo&sort=popular`);
+    const jsonVtSearch = await resVtSearch.json();
+    console.log(`VoraToon Search (kanojo & sort=popular): ${jsonVtSearch.data.length} items. First: "${jsonVtSearch.data[0]?.title}"`);
+    if (!jsonVtSearch.data.length) throw new Error('VoraToon search empty');
+
+    console.log(`✓ Successfully verified: VoraToon latest, details, chapter pages, and search with sort`);
+
     console.log('✓ All Error response formats, Security, Pagination, Genre, Type, Softkomik, Komiku, Hwago, DoujinDesu, Shinigami, KomikTap, and WestManga source tests verified successfully!');
   } finally {
     server.close();

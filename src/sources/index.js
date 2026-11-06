@@ -12,6 +12,10 @@ const BacakomikSource = require('./bacakomik/BacakomikSource');
 const LumosSource = require('./lumos/LumosSource');
 const PixhentaiSource = require('./pixhentai/PixhentaiSource');
 const HolotoonSource = require('./holotoon/HolotoonSource');
+const IkiruSource = require('./ikiru/IkiruSource');
+const HentaicrotSource = require('./hentaicrot/HentaicrotSource');
+const VoratoonSource = require('./voratoon/VoratoonSource');
+const LuvyaaSource = require('./luvyaa/LuvyaaSource');
 
 const sources = new Map();
 
@@ -65,7 +69,10 @@ registerSource(new BacakomikSource());
 registerSource(new LumosSource());
 registerSource(new PixhentaiSource());
 registerSource(new HolotoonSource());
-registerSource(new HolotoonSource());
+registerSource(new IkiruSource());
+registerSource(new HentaicrotSource());
+registerSource(new VoratoonSource());
+registerSource(new LuvyaaSource());
 
 module.exports = {
   registerSource,

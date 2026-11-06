@@ -345,9 +345,16 @@ class LumosSource extends BaseSource {
 
       const chTitle = $(el).find('span').first().text().trim() || `Chapter ${$(el).attr('data-chapter')}`;
       const chNum = $(el).attr('data-chapter')?.trim() || '';
-      // Date: span.tabular-nums — strip leading noise number
-      const rawDate = $(el).find('span.tabular-nums, span[class*="tabular-nums"]').text().trim()
-        .replace(/^\d+\s+/, '').trim();
+      // Date: Lumos has view count (with SVG/title="views") and date in span.tabular-nums
+      const dateSpans = $(el).find('span.tabular-nums, span[class*="tabular-nums"]');
+      let dateElement = dateSpans.filter((_, s) => !$(s).find('svg').length && !$(s).attr('title')?.toLowerCase().includes('views')).first();
+      if (!dateElement.length) {
+        dateElement = dateSpans.last();
+      }
+      let rawDate = (dateElement.text() || $(el).find('div.justify-end span').last().text() || '').trim();
+      if (/^\d+$/.test(rawDate) || /views/i.test(rawDate)) {
+        rawDate = null;
+      }
 
       chapters.push({
         title: chTitle,
