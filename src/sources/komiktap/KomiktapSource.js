@@ -54,7 +54,7 @@ class KomiktapSource extends BaseSource {
     if (rawSort === 'popular' || rawSort === 'popularity') {
       return { orderParam: 'popular', sortId: 'popular' };
     }
-    if (rawSort === 'newest' || rawSort === 'update' || rawSort === 'updated') {
+    if (rawSort === 'newest' || rawSort === 'latest' || rawSort === 'updated') {
       return { orderParam: 'update', sortId: 'newest' };
     }
     if (rawSort === 'az' || rawSort === 'a-z' || rawSort === 'title') {
@@ -64,7 +64,7 @@ class KomiktapSource extends BaseSource {
       return { orderParam: 'titlereverse', sortId: 'za' };
     }
     // Default: latest released (order=latest)
-    return { orderParam: 'latest', sortId: 'latest' };
+    return { orderParam: 'latest', sortId: 'update' };
   }
 
   /**
@@ -214,13 +214,13 @@ class KomiktapSource extends BaseSource {
   }
 
   /**
-   * Get latest manga list (order=latest).
+   * Get latest manga list (order=update).
    * @param {number} page
    * @param {Object} [options]
    */
   async getLatest(page = 1, options = {}) {
     const pageNum = Math.max(1, Number(page) || 1);
-    const url = `${this.baseUrl}/manga/?page=${pageNum}&order=latest`;
+    const url = `${this.baseUrl}/manga/?page=${pageNum}&order=update`;
 
     const html = await getHtml(url, {
       headers: {
@@ -235,7 +235,6 @@ class KomiktapSource extends BaseSource {
     return {
       source: this.name,
       sort: 'latest',
-      orderby: 'latest',
       data: items,
       pagination,
     };
@@ -270,13 +269,13 @@ class KomiktapSource extends BaseSource {
   }
 
   /**
-   * Get newest updated manga list (order=update).
+   * Get newest updated manga list (order=latest).
    * @param {number} page
    * @param {Object} [options]
    */
   async getNewest(page = 1, options = {}) {
     const pageNum = Math.max(1, Number(page) || 1);
-    const url = `${this.baseUrl}/manga/?page=${pageNum}&order=update`;
+    const url = `${this.baseUrl}/manga/?page=${pageNum}&order=latest`;
 
     const html = await getHtml(url, {
       headers: {
@@ -758,11 +757,18 @@ class KomiktapSource extends BaseSource {
     }
 
     // Synopsis
-    const synopsis =
+    let synopsis =
       $('.entry-content[itemprop="description"] p, .entry-content p, .desc')
         .first()
         .text()
         .trim() || null;
+    if (!synopsis) {
+      synopsis =
+        $('.entry-content[itemprop="description"], .entry-content-single, .entry-content, .desc, .sinopsis')
+          .first()
+          .text()
+          .trim() || null;
+    }
 
     // Metadata items (Status, Type, Author, Artist, Released)
     let status = 'ongoing';

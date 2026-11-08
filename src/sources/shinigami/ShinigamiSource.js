@@ -913,7 +913,7 @@ class ShinigamiSource extends BaseSource {
 
   /**
    * Get supported sort options for Shinigami.
-   * Shinigami supports latest, popular, rating, and bookmark (favorites) via /manga/list.
+   * Shinigami supports latest, popular, dan rating via /manga/list.
    * Shinigami does NOT have alphabetical /az endpoint.
    */
   getSupportedSorts() {

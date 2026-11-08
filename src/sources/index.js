@@ -16,6 +16,11 @@ const IkiruSource = require('./ikiru/IkiruSource');
 const HentaicrotSource = require('./hentaicrot/HentaicrotSource');
 const VoratoonSource = require('./voratoon/VoratoonSource');
 const LuvyaaSource = require('./luvyaa/LuvyaaSource');
+const CrotpediaSource = require('./crotpedia/CrotpediaSource');
+const MihentaiSource = require('./mihentai/MihentaiSource');
+const MaidSource = require('./maid/MaidSource');
+const AinzSource = require('./ainz/AinzSource');
+const SoulScansSource = require('./soulscans/SoulScansSource');
 
 const sources = new Map();
 
@@ -73,6 +78,11 @@ registerSource(new IkiruSource());
 registerSource(new HentaicrotSource());
 registerSource(new VoratoonSource());
 registerSource(new LuvyaaSource());
+registerSource(new CrotpediaSource());
+registerSource(new MihentaiSource());
+registerSource(new MaidSource());
+registerSource(new AinzSource());
+registerSource(new SoulScansSource());
 
 module.exports = {
   registerSource,

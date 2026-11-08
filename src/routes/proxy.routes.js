@@ -63,7 +63,23 @@ router.get('/image', async (req, res, next) => {
         targetUrl.hostname.includes('linksaya') ||
         targetUrl.hostname.includes('komikindo')
       ) {
-        referer = 'https://2.komikindo.shop/';
+        referer = 'https://komikindo.click/';
+      } else if (
+        targetUrl.hostname.includes('eromanga') ||
+        targetUrl.hostname.includes('crotpedia')
+      ) {
+        referer = 'https://crotpedia.net/';
+      } else if (
+        targetUrl.hostname.includes('cdnkuma') ||
+        targetUrl.hostname.includes('ainzscans') ||
+        targetUrl.hostname.includes('cdnainz')
+      ) {
+        referer = 'https://v3.ainzscans01.com/';
+      } else if (
+        targetUrl.hostname.includes('soulscans') ||
+        targetUrl.hostname.includes('dbms.my.id')
+      ) {
+        referer = 'https://v1.soulscans.asia/';
       } else {
         referer = `${targetUrl.protocol}//${targetUrl.hostname}/`;
       }

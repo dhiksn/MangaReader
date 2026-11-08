@@ -380,6 +380,36 @@ router.get('/sources/:source/newest', resolveSource, async (req, res, next) => {
 });
 
 /**
+ * GET /api/sources/:source/trending?page=1
+ * Get trending manga list for a source (e.g. Lunarx sort=trending).
+ */
+router.get('/sources/:source/trending', resolveSource, async (req, res, next) => {
+  try {
+    if (typeof req.mangaSource.getTrending !== 'function') {
+      throw createNotFound(
+        `Sumber '${req.mangaSource.name}' tidak menyediakan endpoint /trending`,
+        'NOT_FOUND'
+      );
+    }
+    const page = validatePageParam(req.query.page);
+    const result = await req.mangaSource.getTrending(page, req.query);
+    validatePageBounds(page, result);
+    const pagination =
+      result.pagination !== undefined
+        ? result.pagination
+        : formatPagination({ page, maxPage: result.maxPage, hasNextPage: result.hasNextPage });
+    res.json({
+      success: true,
+      source: result.source || req.mangaSource.name,
+      data: result.data || [],
+      ...(isPaginationValid(pagination) ? { pagination } : {}),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /api/sources/:source/bookmark?page=1
  * Get bookmarked / most favorite manga list for a source.
  * - Shinigami: scrapes from /manga/list?sort=bookmark
@@ -668,7 +698,7 @@ router.get('/sources/:source/manga/:slug', resolveSource, async (req, res, next)
 
     // Strip internal-only fields from chapters before sending response
     if (Array.isArray(rest.chapters)) {
-      rest.chapters = rest.chapters.map(({ id, rawSlug, chapterNumber, ...pub }) => pub);
+      rest.chapters = rest.chapters.map(({ id, rawSlug, chapterNumber, chapterId, ...pub }) => pub);
     }
 
     res.json({ success: true, source, data: rest });
@@ -695,6 +725,8 @@ router.get('/sources/:source/chapter/:slug/:chapter', resolveSource, async (req,
     } else if (req.mangaSource.name === 'softkomik') {
       const rawCdn = req.query.cdn || (req.query.server ? `cdn${req.query.server}` : 'cdn1');
       serverParam = String(rawCdn).toLowerCase().trim();
+    } else if (req.mangaSource.name === 'maid') {
+      serverParam = req.query.password || null;
     } else {
       serverParam = req.query.server || req.query.cdn;
     }

@@ -33,10 +33,16 @@ class LuvyaaSource extends BaseSource {
 
   _resolveOrder(raw) {
     const map = {
-      latest: 'update', update: 'update',
+      update: 'update',
+      latest_update: 'update',
+      latest: 'latest',
+      newest: 'latest',
       popular: 'popular',
-      az: 'title', title: 'title',
+      popularity: 'popular',
+      az: 'title',
+      title: 'title',
       za: 'titlereverse',
+      titlereverse: 'titlereverse',
     };
     return map[String(raw || '').toLowerCase()] || 'update';
   }
@@ -135,7 +141,12 @@ class LuvyaaSource extends BaseSource {
     const order = this._resolveOrder(options.order || options.sort || 'update');
     const params = new URLSearchParams({ order, page: pageNum });
     if (options.status) params.set('status', String(options.status).toLowerCase());
-    if (options.type) params.set('type', String(options.type).toLowerCase());
+    if (String(options.type || '').trim().toLowerCase() === 'pornhwa') {
+      params.append('genre[]', '50');
+      params.set('type', '');
+    } else if (options.type) {
+      params.set('type', String(options.type).toLowerCase());
+    }
     if (options.genre) {
       const genres = await this.getGenres();
       const keys = String(options.genre).split(',').map((g) => g.trim().toLowerCase()).filter(Boolean);
@@ -230,7 +241,7 @@ class LuvyaaSource extends BaseSource {
   }
 
   async getTypes() {
-    return ['manga', 'manhwa', 'manhua'];
+    return ['manga', 'manhwa', 'manhua', 'pornhwa'];
   }
 
   async getByType(type, page = 1, options = {}) {
@@ -238,7 +249,9 @@ class LuvyaaSource extends BaseSource {
     const cleanType = String(type || '').trim().toLowerCase();
     if (!cleanType) throw createBadRequest("Parameter 'type' wajib diisi", 'INVALID_PARAMETER');
     const order = this._resolveOrder(options.order || options.sort || 'update');
-    const url = `${this.baseUrl}/manga/?type=${encodeURIComponent(cleanType)}&order=${order}&page=${pageNum}`;
+    const url = cleanType === 'pornhwa'
+      ? `${this.baseUrl}/manga/?genre%5B%5D=50&type=&order=${order}&page=${pageNum}`
+      : `${this.baseUrl}/manga/?type=${encodeURIComponent(cleanType)}&order=${order}&page=${pageNum}`;
     const { data, maxPage, hasNextPage } = await this._fetchListing(url, pageNum);
     return { source: this.name, type: cleanType, page: pageNum, maxPage, hasNextPage, data };
   }

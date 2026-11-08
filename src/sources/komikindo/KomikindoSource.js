@@ -7,8 +7,8 @@ const { formatRelativeTime } = require('../../utils/date');
 class KomikindoSource extends BaseSource {
   constructor() {
     super('komikindo', 'Komikindo');
-    this.baseUrl = 'https://2.komikindo.shop';
-    this.icon = 'https://i3.wp.com/2.komikindo.shop/wp-content/uploads/2023/05/cropped-favicon-1-32x32.png';
+    this.baseUrl = 'https://komikindo.click';
+    this.icon = 'https://i3.wp.com/komikindo.click/wp-content/uploads/2023/05/cropped-favicon-1-32x32.png';
 
     // Genres cache
     this._cachedGenres = null;
@@ -30,8 +30,17 @@ class KomikindoSource extends BaseSource {
    */
   _cleanCoverUrl(url) {
     if (!url) return null;
-    let cleaned = url.trim();
-    cleaned = cleaned.replace(/^https?:\/\/i\d+\.wp\.com\/(https?:\/\/)?/i, (m, p1) => (p1 ? p1 : 'https://'));
+    const trimmed = url.trim();
+    if (trimmed.includes('linksaya.com')) {
+      // linksaya.com blocks direct access with Cloudflare (403 Forbidden).
+      // It MUST be accessed via WordPress Photon CDN and preserve pre-cached resize parameters.
+      if (!trimmed.includes('.wp.com')) {
+        const noScheme = trimmed.replace(/^https?:\/\//i, '');
+        return `https://i0.wp.com/${noScheme}?resize=285,425`;
+      }
+      return trimmed;
+    }
+    const cleaned = trimmed.replace(/^https?:\/\/i\d+\.wp\.com\/(https?:\/\/)?/i, (m, p1) => (p1 ? p1 : 'https://'));
     return cleaned.replace(/[?&](resize|fit|w|h|width|height)=[^&]*/gi, '').replace(/[?&]$/, '');
   }
 
@@ -471,6 +480,7 @@ class KomikindoSource extends BaseSource {
       genres,
       totalChapters: chapters.length,
       chapters,
+      similar: related,
       related,
     };
   }
