@@ -259,6 +259,10 @@ class SoulScansSource extends BaseSource {
   async getList(page = 1, options = {}) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const sort = this._resolveSort(options.sort || options.order || 'latest');
+    // Jika latest tanpa filter, arahkan ke getLatest (home-sections) yang datanya real-time update
+    if (sort === 'latest' && !options.status && !options.type && !options.genre && !options.q && !options.query) {
+      return this.getLatest(pageNum);
+    }
     const params = { page: pageNum, sort, order: 'desc' };
     if (options.status) params.status = String(options.status).toUpperCase();
     if (options.type) params.comic_type = String(options.type).toUpperCase();

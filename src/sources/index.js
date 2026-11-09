@@ -21,6 +21,8 @@ const MihentaiSource = require('./mihentai/MihentaiSource');
 const MaidSource = require('./maid/MaidSource');
 const AinzSource = require('./ainz/AinzSource');
 const SoulScansSource = require('./soulscans/SoulScansSource');
+const KomikstationSource = require('./komikstation/KomikstationSource');
+const KomikindochSource = require('./komikindoch/KomikindochSource');
 
 const sources = new Map();
 
@@ -83,6 +85,8 @@ registerSource(new MihentaiSource());
 registerSource(new MaidSource());
 registerSource(new AinzSource());
 registerSource(new SoulScansSource());
+registerSource(new KomikstationSource());
+registerSource(new KomikindochSource());
 
 module.exports = {
   registerSource,

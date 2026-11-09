@@ -625,6 +625,34 @@ router.get('/sources/:source/genres/:genre', resolveSource, async (req, res, nex
 });
 
 /**
+ * GET /api/sources/:source/tema
+ * Get list of available tema for a source (e.g. komikindoch).
+ */
+router.get('/sources/:source/tema', resolveSource, async (req, res, next) => {
+  try {
+    if (typeof req.mangaSource.getTema !== 'function') {
+      throw createNotFound(`Sumber '${req.mangaSource.name}' tidak menyediakan endpoint /tema`, 'NOT_FOUND');
+    }
+    const data = await req.mangaSource.getTema();
+    res.json({ success: true, source: req.mangaSource.name, data });
+  } catch (err) { next(err); }
+});
+
+/**
+ * GET /api/sources/:source/demografis
+ * Get list of available demografis for a source (e.g. komikindoch).
+ */
+router.get('/sources/:source/demografis', resolveSource, async (req, res, next) => {
+  try {
+    if (typeof req.mangaSource.getDemografis !== 'function') {
+      throw createNotFound(`Sumber '${req.mangaSource.name}' tidak menyediakan endpoint /demografis`, 'NOT_FOUND');
+    }
+    const data = await req.mangaSource.getDemografis();
+    res.json({ success: true, source: req.mangaSource.name, data });
+  } catch (err) { next(err); }
+});
+
+/**
  * GET /api/sources/:source/types
  * Get list of available manga types ('manga', 'manhwa', 'manhua').
  */
