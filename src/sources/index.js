@@ -23,6 +23,13 @@ const AinzSource = require('./ainz/AinzSource');
 const SoulScansSource = require('./soulscans/SoulScansSource');
 const KomikstationSource = require('./komikstation/KomikstationSource');
 const KomikindochSource = require('./komikindoch/KomikindochSource');
+const SasangeyouSource = require('./sasangeyou/SasangeyouSource');
+const CgbumSource = require('./cgbum/CgbumSource');
+const IzanamiScansSource = require('./izanamiscans/IzanamiScansSource');
+const MangaSusukuSource = require('./mangasusuku/MangaSusukuSource');
+const KanzeninSource = require('./kanzenin/KanzeninSource');
+const LepoytlSource = require('./lepoytl/LepoytlSource');
+const YuriLabSource = require('./yurilab/YuriLabSource');
 
 const sources = new Map();
 
@@ -87,6 +94,13 @@ registerSource(new AinzSource());
 registerSource(new SoulScansSource());
 registerSource(new KomikstationSource());
 registerSource(new KomikindochSource());
+registerSource(new SasangeyouSource());
+registerSource(new CgbumSource());
+registerSource(new IzanamiScansSource());
+registerSource(new MangaSusukuSource());
+registerSource(new KanzeninSource());
+registerSource(new LepoytlSource());
+registerSource(new YuriLabSource());
 
 module.exports = {
   registerSource,
