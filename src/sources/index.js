@@ -30,6 +30,9 @@ const MangaSusukuSource = require('./mangasusuku/MangaSusukuSource');
 const KanzeninSource = require('./kanzenin/KanzeninSource');
 const LepoytlSource = require('./lepoytl/LepoytlSource');
 const YuriLabSource = require('./yurilab/YuriLabSource');
+const NatsuSource = require('./natsu/NatsuSource');
+const KomikRemajaSource = require('./komikremaja/KomikRemajaSource');
+const ShiroDoujinSource = require('./shirodoujin/ShiroDoujinSource');
 
 const sources = new Map();
 
@@ -101,6 +104,9 @@ registerSource(new MangaSusukuSource());
 registerSource(new KanzeninSource());
 registerSource(new LepoytlSource());
 registerSource(new YuriLabSource());
+registerSource(new NatsuSource());
+registerSource(new KomikRemajaSource());
+registerSource(new ShiroDoujinSource());
 
 module.exports = {
   registerSource,

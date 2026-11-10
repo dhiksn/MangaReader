@@ -14,7 +14,7 @@ class KomiktapSource extends BaseSource {
     super('komiktap', 'KomikTap');
     this.domain = 'komiktap.info';
     this.baseUrl = `https://${this.domain}`;
-    this.icon = `${this.baseUrl}/favicon.ico`;
+    this.icon = `https://komiktap.info/wp-content/uploads/2020/09/cropped-LOGOa-32x32.png`;
     this.pageSize = 50;
     this.searchPageSize = 20;
 

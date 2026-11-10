@@ -7,7 +7,7 @@ class KomikstationSource extends BaseSource {
   constructor() {
     super('komikstation', 'KomikStation');
     this.baseUrl = 'https://komikstation.org';
-    this.icon = `${this.baseUrl}/favicon.ico`;
+    this.icon = `https://komikstation.org/wp-content/uploads/2019/07/cropped-Favicon-1-150x150.png`;
 
     this._cachedGenres = null;
     this._cachedGenresExpiresAt = 0;

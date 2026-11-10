@@ -7,7 +7,7 @@ class KomikindochSource extends BaseSource {
   constructor() {
     super('komikindoch', 'KomikIndo');
     this.baseUrl = 'https://komikindo.ch';
-    this.icon = `${this.baseUrl}/favicon.ico`;
+    this.icon = `https://komikindo.ch/wp-content/uploads/2020/12/fav-79x83.png`;
 
     this._cachedGenres = null;
     this._cachedGenresExpiresAt = 0;

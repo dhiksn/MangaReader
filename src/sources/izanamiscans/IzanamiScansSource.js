@@ -7,7 +7,7 @@ class IzanamiScansSource extends BaseSource {
   constructor() {
     super('izanamiscans', 'IzanamiScans');
     this.baseUrl = 'https://izanamiscans.my.id';
-    this.icon = `${this.baseUrl}/favicon.ico`;
+    this.icon = `https://i2.wp.com/izanamiscans.my.id/wp-content/uploads/2024/08/cropped-android-chrome-512x512-1-32x32.png`;
 
     this._cachedGenres = null;
     this._cachedGenresExpiresAt = 0;
