@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const cheerio = require('cheerio');
 const BaseSource = require('../BaseSource');
 const { getHtml } = require('../../utils/httpClient');
@@ -12,6 +13,17 @@ class HolotoonSource extends BaseSource {
     this.baseUrl = 'https://holodek.run';
     this.icon = 'https://holodek.run/icons/icon-144x144.png';
 
+    // Auth session cache
+    this._authCookies = null;
+    this._authExpiresAt = 0;
+
+    // Age consent cookie cache
+    this._ageCookie = null;
+    this._ageCookieExpiresAt = 0;
+
+    // Reader pass token cache
+    this._passToken = null;
+
     // Genres cache
     this._cachedGenres = null;
     this._cachedGenresExpiresAt = 0;
@@ -24,6 +36,210 @@ class HolotoonSource extends BaseSource {
       { id: 'rating', name: 'Rating' },
       { id: 'az', name: 'A-Z' },
     ];
+  }
+
+  // ─── Authentication ─────────────────────────────────────────────────────────
+
+  async login() {
+    // 1. Direct session cookie from .env
+    const envCookie = process.env.HOLOTOON_COOKIE || process.env.HOLOTOON_SESSION_TOKEN;
+    if (envCookie && envCookie.trim()) {
+      let cookieVal = envCookie.trim();
+      if (!cookieVal.includes('=')) {
+        cookieVal = `__Secure-better-auth.session_token=${cookieVal}; better-auth.session_token=${cookieVal}`;
+      }
+      this._authCookies = cookieVal;
+      this._authExpiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 hari
+      console.log('[Holotoon] Menggunakan session cookie dari .env');
+      return this._authCookies;
+    }
+
+    const emailOrUser = process.env.HOLOTOON_EMAIL || process.env.HOLOTOON_USERNAME;
+    const password = process.env.HOLOTOON_PASSWORD;
+
+    if (!emailOrUser || !password) {
+      return null;
+    }
+
+    const isEmail = emailOrUser.includes('@');
+    const endpoint = isEmail ? '/api/auth/sign-in/email' : '/api/auth/sign-in/username';
+    const payload = isEmail
+      ? { email: emailOrUser.trim().toLowerCase(), password, rememberMe: true }
+      : { username: emailOrUser.trim().toLowerCase(), password, rememberMe: true };
+
+    try {
+      const res = await fetch(`${this.baseUrl}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Referer: `${this.baseUrl}/`,
+          Origin: this.baseUrl,
+          'User-Agent': FIREFOX_UA,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.error) {
+        if (data.code === 'turnstile_missing_token' || data.code === 'turnstile_rejected') {
+          console.warn('[Holotoon] Login otomatis dicegat oleh Cloudflare Turnstile. Silakan login sekali di browser (https://holodek.run), lalu salin cookie "better-auth.session_token" ke HOLOTOON_COOKIE di file .env.');
+        } else {
+          console.warn('[Holotoon Login Gagal]:', data.error || data.message || `HTTP ${res.status}`);
+        }
+        return null;
+      }
+
+      const setCookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
+      const cookies = setCookies.map((c) => c.split(';')[0].trim()).join('; ');
+      if (cookies) {
+        this._authCookies = cookies;
+        this._authExpiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+        console.log('[Holotoon] Login berhasil sebagai:', emailOrUser);
+        return this._authCookies;
+      }
+    } catch (err) {
+      console.warn('[Holotoon Login Exception]:', err.message);
+    }
+    return null;
+  }
+
+  async _ensureAuth() {
+    if (!this._authCookies || Date.now() > this._authExpiresAt) {
+      await this.login();
+    }
+    return this._authCookies;
+  }
+
+  // ─── PoW & Guard Helpers ───────────────────────────────────────────────────
+
+  _solvePoWChallenge(seed, difficulty, maxIterations = 4000000) {
+    const requiredZeroBytes = Math.floor(difficulty / 8);
+    const remainingBits = difficulty % 8;
+    const mask = remainingBits > 0 ? (0xFF << (8 - remainingBits)) & 0xFF : 0;
+
+    for (let n = 0; n < maxIterations; n++) {
+      const hash = crypto.createHash('sha256').update(seed + n).digest();
+      let valid = true;
+      for (let j = 0; j < requiredZeroBytes; j++) {
+        if (hash[j] !== 0) {
+          valid = false;
+          break;
+        }
+      }
+      if (valid && remainingBits > 0) {
+        if ((hash[requiredZeroBytes] & mask) !== 0) valid = false;
+      }
+      if (valid) return String(n);
+    }
+    throw new Error(`PoW challenge solve timeout for difficulty ${difficulty}`);
+  }
+
+  async _ensureAgeConsent(targetUrl) {
+    if (this._ageCookie && Date.now() < this._ageCookieExpiresAt) {
+      return this._ageCookie;
+    }
+
+    try {
+      const form = new URLSearchParams();
+      form.append('redirect', targetUrl || '/');
+      const res = await fetch(`${this.baseUrl}/api/age-consent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Referer: targetUrl || `${this.baseUrl}/`,
+          Origin: this.baseUrl,
+          'User-Agent': FIREFOX_UA,
+        },
+        body: form.toString(),
+        redirect: 'manual',
+      });
+
+      const setCookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
+      const ageCookie = setCookies.find((c) => c.includes('holo_age_ok'));
+      if (ageCookie) {
+        this._ageCookie = ageCookie.split(';')[0].trim();
+        this._ageCookieExpiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 jam
+      }
+    } catch (err) {
+      console.warn('[Holotoon AgeConsent Error]:', err.message);
+    }
+    return this._ageCookie;
+  }
+
+  async _buildCookies(extraCookies = []) {
+    const cookies = [];
+    const auth = await this._ensureAuth();
+    if (auth) cookies.push(auth);
+    if (this._ageCookie) cookies.push(this._ageCookie);
+    for (const c of extraCookies) {
+      if (c && !cookies.includes(c)) cookies.push(c);
+    }
+    return cookies.join('; ');
+  }
+
+  /**
+   * Fetch URL with automatic Reader-Guard PoW solver and Age-Gate handling.
+   */
+  async _fetchWithGuard(url, options = {}) {
+    await this._ensureAgeConsent(url);
+
+    let cookieHeader = await this._buildCookies();
+    const headers = {
+      'User-Agent': FIREFOX_UA,
+      Referer: options.referer || `${this.baseUrl}/`,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      ...options.headers,
+    };
+    if (cookieHeader) headers['Cookie'] = cookieHeader;
+
+    let res = await fetch(url, { headers });
+    let html = await res.text();
+
+    // 1. Check for Reader-Guard ("Memverifikasi browser")
+    if (html.includes('/api/reader-guard/release')) {
+      try {
+        const guardGet = await fetch(`${this.baseUrl}/api/reader-guard/release`, {
+          headers: {
+            Referer: url,
+            Origin: this.baseUrl,
+            'User-Agent': FIREFOX_UA,
+            Cookie: cookieHeader,
+          },
+        });
+        const guardData = await guardGet.json();
+        if (guardData && guardData.challenge) {
+          const nonce = this._solvePoWChallenge(guardData.challenge.seed, guardData.challenge.difficulty);
+          await fetch(`${this.baseUrl}/api/reader-guard/release`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Referer: url,
+              Origin: this.baseUrl,
+              'User-Agent': FIREFOX_UA,
+              Cookie: cookieHeader,
+            },
+            body: JSON.stringify({ challenge: guardData.challenge, nonce }),
+          });
+        }
+        // Refetch after release
+        res = await fetch(url, { headers });
+        html = await res.text();
+      } catch (err) {
+        console.warn('[Holotoon ReaderGuard Solve Error]:', err.message);
+      }
+    }
+
+    // 2. Check for Age-Consent ("Konten 18+")
+    if (html.includes('Konten 18+') && html.includes('/api/age-consent')) {
+      await this._ensureAgeConsent(url);
+      cookieHeader = await this._buildCookies();
+      if (cookieHeader) headers['Cookie'] = cookieHeader;
+      res = await fetch(url, { headers });
+      html = await res.text();
+    }
+
+    return html;
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────
@@ -62,8 +278,7 @@ class HolotoonSource extends BaseSource {
     const items = [];
     const seen = new Set();
 
-    // Holotoon hanya punya 1 grid, langsung parse semua card
-    $('a.group[href^="/comic/"]').each((_, el) => {
+    $('a[href^="/comic/"]').each((_, el) => {
       const href = $(el).attr('href') || '';
       const slug = this._slugFromComicUrl(href);
       if (!slug || seen.has(slug)) return;
@@ -73,32 +288,30 @@ class HolotoonSource extends BaseSource {
       if (!title) return;
 
       const imgEl = $(el).find('img').first();
-      const cover = imgEl.attr('data-src') ||
+      const cover = imgEl.attr('src') ||
+                    imgEl.attr('data-src') ||
                     imgEl.attr('data-lazy-src') ||
-                    (imgEl.attr('src')?.startsWith('data:') ? null : imgEl.attr('src')) ||
                     null;
+      // Skip placeholder covers
+      const finalCover = (cover && !cover.includes('placeholder')) ? cover : null;
 
-      // Type: span.absolute top-2 left-2
-      const type = $(el).find('span.absolute').filter((_, s) => {
-        const cls = $(s).attr('class') || '';
-        return cls.includes('top-2') && cls.includes('left-2');
-      }).text().trim().toLowerCase() || null;
+      // All span texts in order: [type, status, latestChapter, date]
+      const spans = $(el).find('span').map((_, s) => $(s).text().trim()).get().filter(Boolean);
 
-      // Status: span.absolute top-2 right-2
-      const statusRaw = $(el).find('span.absolute').filter((_, s) => {
-        const cls = $(s).attr('class') || '';
-        return cls.includes('top-2') && cls.includes('right-2');
-      }).text().trim().toLowerCase();
-      const status = statusRaw || null;
+      // Type: first lowercase word-only span
+      const type = spans.find((s) => /^[a-z]+$/.test(s)) || null;
 
-      // Latest chapter: first span in .flex.items-center.justify-between (left side)
-      const chText = $(el).find('div.flex span').first().text().trim().replace(/\u00a0/g, '').trim();
-      const latestChapter = chText || null;
+      // Status: ongoing/completed/hiatus/dropped
+      const statusRaw = spans.find((s) => ['ongoing','completed','hiatus','dropped'].includes(s.toLowerCase()));
+      const status = statusRaw?.toLowerCase() || null;
 
-      // Date: span.text-surface-500
-      const date = $(el).find('span.text-surface-500').text().trim() || null;
+      // Latest chapter: span containing "Chapter"
+      const chText = spans.find((s) => /chapter/i.test(s)) || null;
 
-      items.push({ title, slug, cover, type, status, latestChapter, date });
+      // Date: span containing comma or digits (date format)
+      const date = spans.find((s) => /\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\w+)\s+\d{4}|\d{4}/.test(s)) || null;
+
+      items.push({ title, slug, cover: finalCover, type, status, latestChapter: chText, date });
     });
 
     return items;
@@ -120,7 +333,7 @@ class HolotoonSource extends BaseSource {
   }
 
   async _fetchListing(url, pageNum) {
-    const html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+    const html = await this._fetchWithGuard(url, { referer: `${this.baseUrl}/` });
     const $ = cheerio.load(html);
     const data = this._parseCardList($);
     const { hasNextPage, maxPage } = this._parsePagination($, pageNum);
@@ -172,7 +385,7 @@ class HolotoonSource extends BaseSource {
   async search(query, page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const url = `${this.baseUrl}/browse?sort=latest&media=comic&q=${encodeURIComponent(String(query || '').trim())}&page=${pageNum}`;
-    const html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+    const html = await this._fetchWithGuard(url, { referer: `${this.baseUrl}/` });
     const $ = cheerio.load(html);
     const data = this._parseCardList($);
     const { hasNextPage, maxPage } = this._parsePagination($, pageNum);
@@ -184,7 +397,7 @@ class HolotoonSource extends BaseSource {
       return this._cachedGenres;
     }
 
-    const html = await getHtml(`${this.baseUrl}/browse`, { headers: { Referer: `${this.baseUrl}/` } });
+    const html = await this._fetchWithGuard(`${this.baseUrl}/browse`, { referer: `${this.baseUrl}/` });
     const $ = cheerio.load(html);
     const genres = [];
     const seen = new Set();
@@ -219,7 +432,7 @@ class HolotoonSource extends BaseSource {
     if (!found) throw createNotFound(`Genre '${genre}' tidak ditemukan di Holotoon`, 'NOT_FOUND');
 
     const url = `${this.baseUrl}/browse?sort=${sort}&genre=${found.slug}&media=comic&page=${pageNum}`;
-    const html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+    const html = await this._fetchWithGuard(url, { referer: `${this.baseUrl}/` });
     const $ = cheerio.load(html);
     const data = this._parseCardList($);
     const { hasNextPage, maxPage } = this._parsePagination($, pageNum);
@@ -244,7 +457,7 @@ class HolotoonSource extends BaseSource {
     const url = `${this.baseUrl}/comic/${cleanSlug}`;
     let html;
     try {
-      html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+      html = await this._fetchWithGuard(url, { referer: `${this.baseUrl}/` });
     } catch (err) {
       if (err.statusCode === 404) throw createNotFound(`Manga '${cleanSlug}' tidak ditemukan di Holotoon`, 'NOT_FOUND');
       throw err;
@@ -300,24 +513,53 @@ class HolotoonSource extends BaseSource {
       }
     });
 
-    // Chapters — a[href^="/read/"][data-chapter], newest first in HTML → reverse
+    // Chapters
     const chapters = [];
-    $('a[href^="/read/"][data-chapter]').each((_, el) => {
-      const href = $(el).attr('href') || '';
-      if (!href) return;
+    const seenHrefs = new Set();
 
-      const dataChapter = $(el).attr('data-chapter') || '';
-      const chLabel = $(el).find('span.font-semibold').text().trim();
-      const chSub = $(el).find('span.truncate').text().trim().replace(/^—\s*/, '').trim();
-      const chTitle = chLabel && chSub ? `${chLabel} - ${chSub}` : chLabel || chSub || `Chapter ${dataChapter.split(' ')[0]}`;
-      const date = $(el).find('span[class*=tabular]').last().text().trim() || null;
+    $(`a[href*="/read/${cleanSlug}/"]`).each((_, el) => {
+      const href = $(el).attr('href') || '';
+      if (!href || seenHrefs.has(href)) return;
+      if ($(el).text().trim() === 'Start Reading') return; // skip start reading button
+      seenHrefs.add(href);
+
+      const chLabel = $(el).find('div').first().find('span').first().text().trim() ||
+                      $(el).find('span.font-semibold, span[class*=font-weight]').first().text().trim() ||
+                      $(el).text().trim().split('\n')[0].trim();
+      const date = $(el).find('span.min-w-0.break-words, span[class*=x2a5d3a]').last().text().trim() ||
+                   $(el).find('span[style*="tabular-nums"]').last().text().trim() || null;
 
       chapters.push({
-        title: chTitle,
+        title: chLabel,
         slug: `${this.baseUrl}${href}`,
         endpoint: `/api/sources/${this.name}/chapter/${encodeURIComponent(`${this.baseUrl}${href}`)}`,
-        date,
+        date: date && !/^\d+$/.test(date) ? date : null,
       });
+    });
+
+    // Fallback if none found with cleanSlug
+    if (chapters.length === 0) {
+      $('a[href^="/read/"]').each((_, el) => {
+        const href = $(el).attr('href') || '';
+        if (!href || seenHrefs.has(href) || $(el).text().trim() === 'Start Reading') return;
+        seenHrefs.add(href);
+
+        const chLabel = $(el).find('span.font-semibold').text().trim() || $(el).text().trim();
+        const date = $(el).find('span[class*=tabular]').last().text().trim() || null;
+        chapters.push({
+          title: chLabel,
+          slug: `${this.baseUrl}${href}`,
+          endpoint: `/api/sources/${this.name}/chapter/${encodeURIComponent(`${this.baseUrl}${href}`)}`,
+          date,
+        });
+      });
+    }
+
+    // Sort chapters by chapter number descending (newest first)
+    chapters.sort((a, b) => {
+      const numA = parseFloat((a.slug.match(/chapter-([0-9.]+)/) || [])[1] || '0');
+      const numB = parseFloat((b.slug.match(/chapter-([0-9.]+)/) || [])[1] || '0');
+      return numB - numA;
     });
 
     return {
@@ -343,13 +585,7 @@ class HolotoonSource extends BaseSource {
 
     let html;
     try {
-      // Holotoon chapter reader requires Firefox UA
-      html = await getHtml(chapterUrl, {
-        headers: {
-          Referer: `${this.baseUrl}/`,
-          'User-Agent': FIREFOX_UA,
-        },
-      });
+      html = await this._fetchWithGuard(chapterUrl, { referer: `${this.baseUrl}/` });
     } catch (err) {
       if (err.statusCode === 404) throw createNotFound(`Chapter tidak ditemukan di Holotoon`, 'NOT_FOUND');
       throw err;
@@ -358,30 +594,108 @@ class HolotoonSource extends BaseSource {
     const $ = cheerio.load(html);
     const pages = [];
     const seenUrls = new Set();
-
-    // Images: div#reader-pages img OR main img[src*="/image/"]
-    // Filter out UI images (covers, avatars, headers, etc.)
     const SKIP_PATTERNS = ['/chapter-header/', '/chapter-footer/', '/covers/', '/reactions/', '/avatars/', '/shop/', '/site-logo/'];
 
-    $('div#reader-pages img, main img[src*="/image/"]').each((_, img) => {
-      const src = $(img).attr('src')?.trim() || '';
-      if (!src || seenUrls.has(src)) return;
-      if (SKIP_PATTERNS.some((p) => src.includes(p))) return;
-      seenUrls.add(src);
-      pages.push({
-        page: pages.length + 1,
-        url: src,
-        directUrl: src,
-        proxyUrl: `/api/proxy/image?url=${encodeURIComponent(src)}&referer=${encodeURIComponent(`${this.baseUrl}/`)}`,
+    // 1. Try to extract chapterId for encrypted/protected token loader
+    const chapterIdMatch = html.match(/data-chapter-id="([^"]+)"/);
+    const chapterId = chapterIdMatch ? chapterIdMatch[1] : null;
+
+    if (chapterId) {
+      try {
+        const cookieHeader = await this._buildCookies();
+        const reqBody = { chapterId };
+        if (this._passToken) {
+          reqBody.passToken = this._passToken;
+        }
+
+        const tokReq = await fetch(`${this.baseUrl}/api/reader/page-tokens`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Referer: chapterUrl,
+            Origin: this.baseUrl,
+            'User-Agent': FIREFOX_UA,
+            ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+          },
+          body: JSON.stringify(reqBody),
+        });
+
+        const tokData = await tokReq.json().catch(() => ({}));
+
+        let pageTokens = tokData.pageTokens;
+        if (tokData.passToken) {
+          this._passToken = tokData.passToken;
+        }
+
+        // If challenged with PoW:
+        if (!pageTokens && tokData.challenge) {
+          const c = tokData.challenge;
+          const nonce = this._solvePoWChallenge(c.seed, c.difficulty);
+          const tokSolve = await fetch(`${this.baseUrl}/api/reader/page-tokens`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Referer: chapterUrl,
+              Origin: this.baseUrl,
+              'User-Agent': FIREFOX_UA,
+              ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+            },
+            body: JSON.stringify({
+              chapterId,
+              challenge: c,
+              nonce,
+            }),
+          });
+          const solveData = await tokSolve.json().catch(() => ({}));
+          if (solveData.passToken) {
+            this._passToken = solveData.passToken;
+          }
+          pageTokens = solveData.pageTokens;
+        }
+
+        if (pageTokens && typeof pageTokens === 'object') {
+          const keys = Object.keys(pageTokens).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+          for (const k of keys) {
+            const item = pageTokens[k];
+            const src = item?.url?.trim();
+            if (src && !seenUrls.has(src)) {
+              seenUrls.add(src);
+              pages.push({
+                page: pages.length + 1,
+                url: src,
+                directUrl: src,
+                proxyUrl: `/api/proxy/image?url=${encodeURIComponent(src)}&referer=${encodeURIComponent(`${this.baseUrl}/`)}`,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Holotoon PageTokens Resolver Warning]:', err.message);
+      }
+    }
+
+    // 2. Fallback: extract any static images from DOM if page-tokens didn't resolve
+    if (pages.length === 0) {
+      $('div#reader-pages img, main img[src*="/image/"], img[data-src*="/image/"]').each((_, img) => {
+        const src = $(img).attr('src')?.trim() || $(img).attr('data-src')?.trim() || '';
+        if (!src || seenUrls.has(src)) return;
+        if (SKIP_PATTERNS.some((p) => src.includes(p))) return;
+        seenUrls.add(src);
+        pages.push({
+          page: pages.length + 1,
+          url: src,
+          directUrl: src,
+          proxyUrl: `/api/proxy/image?url=${encodeURIComponent(src)}&referer=${encodeURIComponent(`${this.baseUrl}/`)}`,
+        });
       });
-    });
+    }
 
     if (pages.length === 0) {
-      throw createBadGateway('Gagal menemukan gambar chapter dari Holotoon', 'UPSTREAM_ERROR');
+      throw createBadGateway('Gagal menemukan gambar chapter dari Holotoon (Chapter mungkin dilindungi atau terkunci)', 'UPSTREAM_ERROR');
     }
 
     const pageTitle = $('title').text()
-      .replace(/\s*[-–|]\s*Holotoon.*$/i, '')
+      .replace(/\s*[-–|]\s*HoloToon.*$/i, '')
       .replace(/\s*[-–|]\s*Holodek.*$/i, '')
       .trim();
 
