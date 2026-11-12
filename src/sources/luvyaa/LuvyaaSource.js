@@ -33,10 +33,12 @@ class LuvyaaSource extends BaseSource {
 
   _resolveOrder(raw) {
     const map = {
+      latest: 'update',
       update: 'update',
       latest_update: 'update',
-      latest: 'latest',
       newest: 'latest',
+      new: 'latest',
+      added: 'latest',
       popular: 'popular',
       popularity: 'popular',
       az: 'title',

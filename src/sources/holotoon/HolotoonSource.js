@@ -278,40 +278,43 @@ class HolotoonSource extends BaseSource {
     const items = [];
     const seen = new Set();
 
-    $('a[href^="/comic/"]').each((_, el) => {
+    let elements = $('#browse-grid-view a[href^="/comic/"], #browse-list-view a[href^="/comic/"]');
+    if (elements.length === 0) {
+      elements = $('a[href^="/comic/"]').filter((_, el) => {
+        const rel = $(el).attr('rel') || '';
+        const tab = $(el).attr('tabindex') || '';
+        const href = $(el).attr('href') || '';
+        return !rel.includes('nofollow') && tab !== '-1' && !href.includes('honeypot');
+      });
+    }
+
+    elements.each((_, el) => {
       const href = $(el).attr('href') || '';
       const slug = this._slugFromComicUrl(href);
-      if (!slug || seen.has(slug)) return;
+      if (!slug || slug.includes('honeypot') || seen.has(slug)) return;
       seen.add(slug);
 
-      const title = $(el).find('h3').first().text().trim();
+      const title = $(el).find('h3').first().text().trim() || $(el).text().trim();
       if (!title) return;
 
       const imgEl = $(el).find('img').first();
-      const cover = imgEl.attr('src') ||
-                    imgEl.attr('data-src') ||
-                    imgEl.attr('data-lazy-src') ||
-                    null;
-      // Skip placeholder covers
-      const finalCover = (cover && !cover.includes('placeholder')) ? cover : null;
+      const dataSrc = imgEl.attr('data-src') || imgEl.attr('data-lazy-src');
+      const src = imgEl.attr('src');
+      let finalCover = null;
+      if (dataSrc && !dataSrc.startsWith('data:') && !dataSrc.includes('placeholder')) {
+        finalCover = dataSrc;
+      } else if (src && !src.startsWith('data:') && !src.includes('placeholder')) {
+        finalCover = src;
+      }
 
-      // All span texts in order: [type, status, latestChapter, date]
-      const spans = $(el).find('span').map((_, s) => $(s).text().trim()).get().filter(Boolean);
+      const type = $(el).find('span.top-2.left-2, span.absolute').first().text().trim().toLowerCase() || null;
+      const status = $(el).find('span.top-2.right-2').text().trim().toLowerCase() ||
+        $(el).find('span').map((_, s) => $(s).text().trim().toLowerCase()).get().find((s) => ['ongoing','completed','hiatus','dropped'].includes(s)) || null;
 
-      // Type: first lowercase word-only span
-      const type = spans.find((s) => /^[a-z]+$/.test(s)) || null;
+      const latestChapter = $(el).find('div.flex span.text-primary-400, span:contains("Chapter")').first().text().trim() || null;
+      const date = $(el).find('div.flex span.text-surface-500').last().text().trim() || null;
 
-      // Status: ongoing/completed/hiatus/dropped
-      const statusRaw = spans.find((s) => ['ongoing','completed','hiatus','dropped'].includes(s.toLowerCase()));
-      const status = statusRaw?.toLowerCase() || null;
-
-      // Latest chapter: span containing "Chapter"
-      const chText = spans.find((s) => /chapter/i.test(s)) || null;
-
-      // Date: span containing comma or digits (date format)
-      const date = spans.find((s) => /\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\w+)\s+\d{4}|\d{4}/.test(s)) || null;
-
-      items.push({ title, slug, cover: finalCover, type, status, latestChapter: chText, date });
+      items.push({ title, slug, cover: finalCover, type, status, latestChapter, date });
     });
 
     return items;
@@ -465,10 +468,28 @@ class HolotoonSource extends BaseSource {
 
     const $ = cheerio.load(html);
 
+    // Clean out honeypot elements
+    $('[style*="display:none"], [style*="top:-9999px"], [style*="clip:"], [class*="honeypot"], a[href*="honeypot"]').remove();
+
     const title = $('h1').first().text().trim() || cleanSlug;
 
     // Cover
-    const cover = $('img[src*="/covers/"]').first().attr('src') || null;
+    let cover = null;
+    const coverCandidates = $('img[src*="/covers/"], img[data-src*="/covers/"], div[class*="aspect-"] img, main img, article img');
+    coverCandidates.each((_, el) => {
+      if (cover) return;
+      const src = $(el).attr('data-src') || $(el).attr('src') || '';
+      const fullSrc = src.startsWith('http') ? src : (src ? `${this.baseUrl}${src}` : '');
+      if (fullSrc && !fullSrc.includes('site-logo') && !fullSrc.includes('placeholder') && !fullSrc.includes('reactions') && !fullSrc.includes('avatars')) {
+        cover = fullSrc;
+      }
+    });
+    if (!cover) {
+      const og = $('meta[property="og:image"]').attr('content');
+      if (og && !og.includes('site-logo') && !og.includes('placeholder')) {
+        cover = og.startsWith('http') ? og : `${this.baseUrl}${og}`;
+      }
+    }
 
     // Synopsis — Base64 in data-sr attribute
     const dataSr = $('[data-sr]').attr('data-sr');
@@ -503,13 +524,31 @@ class HolotoonSource extends BaseSource {
       genres.push({ name, slug: genreSlug });
     });
 
-    // Author & Artist — dari span "Author: <span>name</span>"
+    // Author & Artist
     let author = null;
-    $('span').each((_, el) => {
-      const text = $(el).clone().children().remove().end().text().trim();
-      if (/^Author:/i.test(text)) {
-        author = $(el).find('span').first().text().trim() || null;
-        return false; // break
+    $('span, div, p').each((_, el) => {
+      if (author) return;
+      const t = $(el).text().trim();
+      if (/^(?:Author|Penulis):/i.test(t)) {
+        const clean = t.replace(/^(?:Author|Penulis):\s*/i, '').trim();
+        const firstPart = clean.split(/(?:Artist|Year|Views|Uploaded by):/i)[0]?.trim();
+        if (firstPart && !firstPart.includes('\n') && firstPart.length < 50) {
+          author = firstPart;
+        }
+      }
+    });
+    if (author) {
+      author = author.replace(/^(?:Author|Penulis):\s*/i, '').trim();
+    }
+
+    // Year
+    let year = null;
+    $('span, div').each((_, el) => {
+      if (year) return;
+      const t = $(el).text().trim();
+      if (/^Year:/i.test(t)) {
+        const m = t.match(/\b(19\d\d|20\d\d)\b/);
+        if (m) year = m[1];
       }
     });
 
@@ -569,6 +608,7 @@ class HolotoonSource extends BaseSource {
       synopsis,
       status,
       author: author || null,
+      year: year || null,
       rating,
       genres,
       totalChapters: chapters.length,
