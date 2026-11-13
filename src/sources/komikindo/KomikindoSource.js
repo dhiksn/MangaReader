@@ -30,18 +30,10 @@ class KomikindoSource extends BaseSource {
    */
   _cleanCoverUrl(url) {
     if (!url) return null;
-    const trimmed = url.trim();
-    if (trimmed.includes('linksaya.com')) {
-      // linksaya.com blocks direct access with Cloudflare (403 Forbidden).
-      // It MUST be accessed via WordPress Photon CDN and preserve pre-cached resize parameters.
-      if (!trimmed.includes('.wp.com')) {
-        const noScheme = trimmed.replace(/^https?:\/\//i, '');
-        return `https://i0.wp.com/${noScheme}?resize=285,425`;
-      }
-      return trimmed;
-    }
-    const cleaned = trimmed.replace(/^https?:\/\/i\d+\.wp\.com\/(https?:\/\/)?/i, (m, p1) => (p1 ? p1 : 'https://'));
-    return cleaned.replace(/[?&](resize|fit|w|h|width|height)=[^&]*/gi, '').replace(/[?&]$/, '');
+    let trimmed = url.trim();
+    if (trimmed.startsWith('//')) trimmed = `https:${trimmed}`;
+    if (trimmed.startsWith('http://')) trimmed = trimmed.replace('http://', 'https://');
+    return trimmed;
   }
 
   /**

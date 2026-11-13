@@ -159,6 +159,15 @@ class DoujindesuSource extends BaseSource {
    */
   _transformPageUrl(page) {
     if (typeof page !== 'string') return page;
+    // Pre-signed S3/MinIO URLs (amz-ch.desu.pics) contain HMAC signatures in query params
+    // (X-Amz-Signature). Any path alteration invalidates the signature and causes 403 Forbidden!
+    if (page.includes('X-Amz-') || page.includes('Signature=')) {
+      return page;
+    }
+    // If it already has /storage/ or /storage2/ or /storage\d+/, never touch it
+    if (/\/storage\d*\//.test(page)) {
+      return page;
+    }
     if (page.includes('/uploads/') && !page.includes('/storage/uploads/')) {
       return page.replace('/uploads/', '/storage/uploads/');
     }
@@ -845,7 +854,7 @@ class DoujindesuSource extends BaseSource {
       return {
         page: idx + 1,
         url: pageUrl,
-        proxyUrl: `/api/proxy/image?url=${encodeURIComponent(pageUrl)}`,
+        proxyUrl: `/api/proxy/image?url=${encodeURIComponent(pageUrl)}&referer=${encodeURIComponent(`${this.baseUrl}/`)}`,
       };
     });
 
@@ -853,6 +862,7 @@ class DoujindesuSource extends BaseSource {
       source: this.name,
       title: chTitle || chData.title || `Chapter ${rawChapter}`,
       totalPages: pages.length,
+      referer: `${this.baseUrl}/`,
       pages,
     };
   }

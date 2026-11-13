@@ -251,7 +251,42 @@ router.get('/sources/:source/za', resolveSource, async (req, res, next) => {
 });
 
 /**
- * GET /api/sources/:source/oldest?page=1
+ * GET /api/sources/:source/popular18?page=1
+ * Get adult/18+ popular manga list for a source.
+ */
+router.get('/sources/:source/popular18', resolveSource, async (req, res, next) => {
+  try {
+    if (typeof req.mangaSource.getPopular18 !== 'function') {
+      throw createNotFound(
+        `Sumber '${req.mangaSource.name}' tidak menyediakan endpoint /popular18`,
+        'NOT_FOUND'
+      );
+    }
+
+    const page = validatePageParam(req.query.page);
+    const result = await req.mangaSource.getPopular18(page, req.query);
+    validatePageBounds(page, result);
+    const pagination =
+      result.pagination !== undefined
+        ? result.pagination
+        : formatPagination({
+            page,
+            maxPage: result.maxPage,
+            hasNextPage: result.hasNextPage,
+          });
+
+    res.json({
+      success: true,
+      source: result.source || req.mangaSource.name,
+      data: result.data || [],
+      ...(isPaginationValid(pagination) ? { pagination } : {}),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**?page=1
  * Get oldest manga list for a source.
  * - DoujinDesu: /api/manga?sort=oldest
  * - Shinigami: /manga/list?sort=latest&sort_order=asc

@@ -36,7 +36,8 @@ router.get('/image', async (req, res, next) => {
         referer = 'https://01.hwago.com/';
       } else if (
         targetUrl.hostname.includes('desu') ||
-        targetUrl.hostname.includes('doujin')
+        targetUrl.hostname.includes('doujin') ||
+        targetUrl.hostname.includes('amz-ch')
       ) {
         referer = 'https://doujin.desu.xxx/';
       } else if (

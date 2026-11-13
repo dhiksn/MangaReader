@@ -33,6 +33,7 @@ const YuriLabSource = require('./yurilab/YuriLabSource');
 const NatsuSource = require('./natsu/NatsuSource');
 const KomikRemajaSource = require('./komikremaja/KomikRemajaSource');
 const ShiroDoujinSource = require('./shirodoujin/ShiroDoujinSource');
+const KomikApkSource = require('./komikapk/KomikApkSource');
 
 const sources = new Map();
 
@@ -107,6 +108,7 @@ registerSource(new YuriLabSource());
 registerSource(new NatsuSource());
 registerSource(new KomikRemajaSource());
 registerSource(new ShiroDoujinSource());
+registerSource(new KomikApkSource());
 
 module.exports = {
   registerSource,

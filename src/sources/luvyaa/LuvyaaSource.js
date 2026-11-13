@@ -17,7 +17,7 @@ class LuvyaaSource extends BaseSource {
   getSupportedSorts() {
     return [
       { id: 'latest', name: 'Terbaru' },
-      { id: 'newest', name: 'Diperbarui' },
+      { id: 'update', name: 'Diperbarui' },
       { id: 'popular', name: 'Populer' },
       { id: 'az', name: 'A-Z' },
       { id: 'za', name: 'Z-A' },
@@ -33,12 +33,13 @@ class LuvyaaSource extends BaseSource {
 
   _resolveOrder(raw) {
     const map = {
-      latest: 'update',
-      update: 'update',
-      latest_update: 'update',
+      latest: 'latest',
       newest: 'latest',
       new: 'latest',
       added: 'latest',
+      update: 'update',
+      diperbarui: 'update',
+      latest_update: 'update',
       popular: 'popular',
       popularity: 'popular',
       az: 'title',
@@ -46,7 +47,7 @@ class LuvyaaSource extends BaseSource {
       za: 'titlereverse',
       titlereverse: 'titlereverse',
     };
-    return map[String(raw || '').toLowerCase()] || 'update';
+    return map[String(raw || '').toLowerCase()] || 'latest';
   }
 
   _parsePagination($, currentPage) {
