@@ -34,6 +34,7 @@ const NatsuSource = require('./natsu/NatsuSource');
 const KomikRemajaSource = require('./komikremaja/KomikRemajaSource');
 const ShiroDoujinSource = require('./shirodoujin/ShiroDoujinSource');
 const KomikApkSource = require('./komikapk/KomikApkSource');
+const FanfoxSource = require('./fanfox/FanfoxSource');
 
 const sources = new Map();
 
@@ -109,6 +110,7 @@ registerSource(new NatsuSource());
 registerSource(new KomikRemajaSource());
 registerSource(new ShiroDoujinSource());
 registerSource(new KomikApkSource());
+registerSource(new FanfoxSource());
 
 module.exports = {
   registerSource,
