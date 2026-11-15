@@ -171,7 +171,7 @@ function validateSlugParam(rawSlug) {
   }
   const clean = rawSlug.trim();
   // Ensure safe characters (alphanumeric, hyphens, underscores)
-  if (!/^[a-zA-Z0-9_\-]+$/.test(clean)) {
+  if (!/^[a-zA-Z0-9_\-~]+$/.test(clean)) {
     throw createBadRequest('Slug manga mengandung karakter tidak valid', 'INVALID_PARAMETER');
   }
   return clean;

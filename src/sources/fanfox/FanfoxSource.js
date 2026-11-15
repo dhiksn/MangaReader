@@ -127,6 +127,44 @@ class FanfoxSource extends BaseSource {
     return { source: this.name, page: pageNum, maxPage, hasNextPage, data };
   }
 
+  async getGenres() {
+    const html = await getHtml(`${this.baseUrl}/directory/?latest`, { headers: this._headers() });
+    const $ = cheerio.load(html);
+    const genres = [];
+    const seen = new Set();
+    $('a[href*="/directory/"]').each((_, el) => {
+      const href = $(el).attr('href') || '';
+      const name = $(el).text().trim();
+      if (!name || name === 'All Genres' || name === 'All') return;
+      if (['Ongoing', 'Completed', 'Popular', 'New', 'Chapter', 'Ratings'].includes(name)) return;
+      const m = href.match(/\/directory\/([^/?#]+)\//);
+      if (!m) return;
+      const slug = m[1];
+      if (!slug || seen.has(slug)) return;
+      seen.add(slug);
+      genres.push({ name, slug });
+    });
+    return genres;
+  }
+
+  async getByGenre(genre, page = 1, options = {}) {
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const cleanGenre = String(genre || '').trim().toLowerCase();
+    if (!cleanGenre) throw createBadRequest("Parameter 'genre' wajib diisi", 'INVALID_PARAMETER');
+    const sortMap = { latest: 'latest', newest: 'news', popular: 'po', rating: 'rating' };
+    const sortParam = sortMap[options.sort || options.order || 'latest'] || 'latest';
+    const pageParam = pageNum > 1 ? `&page=${pageNum}` : '';
+    // Status filter: /directory/{genre}/{status}/?{sort}
+    const statusMap = { ongoing: 'ongoing', completed: 'completed' };
+    const statusSegment = statusMap[String(options.status || '').toLowerCase()];
+    const path = statusSegment
+      ? `/directory/${encodeURIComponent(cleanGenre)}/${statusSegment}/`
+      : `/directory/${encodeURIComponent(cleanGenre)}/`;
+    const url = `${this.baseUrl}${path}?${sortParam}${pageParam}`;
+    const { data, hasNextPage, maxPage } = await this._fetchListing(url, pageNum);
+    return { source: this.name, genre: cleanGenre, page: pageNum, maxPage, hasNextPage, data };
+  }
+
   async search(query, page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const q = encodeURIComponent(String(query || '').trim());
@@ -139,7 +177,10 @@ class FanfoxSource extends BaseSource {
     return { source: this.name, query: String(query || '').trim(), page: pageNum, hasNextPage, data };
   }
 
-  async getDetails(slug) {
+  // Fanfox doesn't have type filtering — override to throw NOT_FOUND
+  async getTypes() {
+    throw createNotFound("Sumber 'fanfox' tidak menyediakan endpoint /types", 'NOT_FOUND');
+  }  async getDetails(slug) {
     const cleanSlug = String(slug || '').replace(/^\/+|\/+$/g, '').split('/')[0];
     if (!cleanSlug) throw createBadRequest("Parameter 'slug' wajib diisi", 'INVALID_PARAMETER');
 
@@ -263,8 +304,9 @@ class FanfoxSource extends BaseSource {
     const images = rawImgs.map((u) => u.startsWith('//') ? `https:${u}` : u);
 
     const pageTitle = $('title').text()
-      .replace(/\s*[-–|]\s*FanFox.*$/i, '')
-      .replace(/^(Read|Baca)\s+/i, '')
+      .replace(/\s*-\s*Read\s+.+$/i, '')
+      .replace(/\s*-\s*MangaFox.*$/i, '')
+      .replace(/\s*-\s*Page\s+\d+.*$/i, '')
       .trim();
 
     return {
