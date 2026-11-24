@@ -6,18 +6,11 @@ const { formatRelativeTime } = require('../../utils/date');
 class ShinigamiSource extends BaseSource {
   constructor() {
     super('shinigami', 'Shinigami');
-    this.domain = '11.shinigami.asia';
+    this.domain = 's1.shinigami.mx';
     this.baseUrl = `https://${this.domain}`;
-    this.icon = 'https://11.shinigami.asia/favicon.png';
-    this.apiDomain = 'api.shngm.io/v1';
-    this.cdnDomain = 'storage.shngm.id';
-    // CDN domains per server (1=default, 2-4=alternates)
-    this.cdnServers = {
-      1: 'storage.shngm.id',
-      2: 'delivery.shngm.id',
-      3: 'mirror1.shngm.id',
-      4: 'mirror2.shngm.id',
-    };
+    this.icon = 'https://s1.shinigami.mx/assets/favicon-BcOFQb4e.png';
+    this.apiDomain = 'api.shinigami.io/v1';
+    this.cdnDomain = 'cdn.shinigami.gg';
     this.pageSize = 24;
 
     // In-memory cache for slug <-> manga_id mapping
@@ -26,6 +19,19 @@ class ShinigamiSource extends BaseSource {
     // Genres cache in memory (24h)
     this._cachedGenres = null;
     this._cachedGenresExpiresAt = 0;
+  }
+
+  /**
+   * Get supported sort options for Shinigami.
+   * Shinigami supports latest, oldest, popular, dan rating via /manga/list.
+   */
+  getSupportedSorts() {
+    return [
+      { id: 'latest', name: 'Terbaru' },
+      { id: 'oldest', name: 'Terlama' },
+      { id: 'popular', name: 'Populer' },
+      { id: 'rating', name: 'Rating' },
+    ];
   }
 
   /**
@@ -40,6 +46,14 @@ class ShinigamiSource extends BaseSource {
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
+  }
+
+  /**
+   * Convert page number to offset for the new offset-based API.
+   * @private
+   */
+  _pageToOffset(page, limit) {
+    return (page - 1) * limit;
   }
 
   /**
@@ -105,7 +119,9 @@ class ShinigamiSource extends BaseSource {
     const rawUpdatedAt = item.latest_chapter_time || item.updated_at || item.created_at;
     const updatedAt = rawUpdatedAt ? formatRelativeTime(rawUpdatedAt) : null;
 
-    const cover = item.cover_portrait_url || item.cover_image_url || null;
+    const cover = (item.cover_portrait_url && item.cover_portrait_url.trim())
+      || (item.cover_image_url && item.cover_image_url.trim())
+      || null;
 
     let latestChapter = null;
     if (item.latest_chapter_number !== undefined && item.latest_chapter_number !== null) {
@@ -178,8 +194,8 @@ class ShinigamiSource extends BaseSource {
     const query = cleanSlug.replace(/[\-_]+/g, ' ').trim();
     try {
       const res = await this._fetchApi('/manga/list', {
-        page: 1,
-        page_size: 10,
+        offset: 0,
+        limit: 10,
         q: query,
       });
 
@@ -210,35 +226,31 @@ class ShinigamiSource extends BaseSource {
 
   /**
    * Get popular manga list from Shinigami.
-   * Sourced from https://id.shinigami.asia/search?sort=popularity.
+   * Sourced from https://s1.shinigami.mx/search?sort=popularity.
    * @param {number} [page=1] Page number
    */
   async getPopular(page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const offset = this._pageToOffset(pageNum, this.pageSize);
 
     const res = await this._fetchApi('/manga/list', {
-      page: pageNum,
-      page_size: this.pageSize,
+      offset,
+      limit: this.pageSize,
       sort: 'popularity',
       sort_order: 'desc',
     });
 
     const rawList = res.data || [];
     const data = rawList.map((item) => this._mapMangaItem(item));
-    const totalRecord = res.meta?.total_record || null;
-    const maxPage = res.meta?.total_page || (totalRecord ? Math.ceil(totalRecord / this.pageSize) : null);
+    const hasNextPage = res.meta?.has_next === true;
 
-    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
-      throw createNotFound(
-        `Halaman ${pageNum} tidak ditemukan${maxPage ? ` (maksimal halaman ${maxPage})` : ''}`,
-        'NOT_FOUND'
-      );
+    if (pageNum > 1 && data.length === 0) {
+      throw createNotFound(`Halaman ${pageNum} tidak ditemukan`, 'NOT_FOUND');
     }
 
-    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
     const pagination = formatPagination({
       page: pageNum,
-      maxPage,
+      maxPage: null,
       hasNextPage,
     });
 
@@ -248,42 +260,37 @@ class ShinigamiSource extends BaseSource {
       data,
       pagination,
       page: pageNum,
-      maxPage,
       hasNextPage,
     };
   }
 
   /**
    * Get latest updated manga list from Shinigami.
-   * Sourced from https://id.shinigami.asia/search?sort=latest.
+   * Sourced from https://s1.shinigami.mx/search?sort=latest.
    * @param {number} [page=1] Page number
    */
   async getLatest(page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const offset = this._pageToOffset(pageNum, this.pageSize);
 
     const res = await this._fetchApi('/manga/list', {
-      page: pageNum,
-      page_size: this.pageSize,
+      offset,
+      limit: this.pageSize,
       sort: 'latest',
       sort_order: 'desc',
     });
 
     const rawList = res.data || [];
     const data = rawList.map((item) => this._mapMangaItem(item));
-    const totalRecord = res.meta?.total_record || null;
-    const maxPage = res.meta?.total_page || (totalRecord ? Math.ceil(totalRecord / this.pageSize) : null);
+    const hasNextPage = res.meta?.has_next === true;
 
-    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
-      throw createNotFound(
-        `Halaman ${pageNum} tidak ditemukan${maxPage ? ` (maksimal halaman ${maxPage})` : ''}`,
-        'NOT_FOUND'
-      );
+    if (pageNum > 1 && data.length === 0) {
+      throw createNotFound(`Halaman ${pageNum} tidak ditemukan`, 'NOT_FOUND');
     }
 
-    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
     const pagination = formatPagination({
       page: pageNum,
-      maxPage,
+      maxPage: null,
       hasNextPage,
     });
 
@@ -293,42 +300,37 @@ class ShinigamiSource extends BaseSource {
       data,
       pagination,
       page: pageNum,
-      maxPage,
       hasNextPage,
     };
   }
 
   /**
    * Get top rated manga list from Shinigami.
-   * Sourced from https://id.shinigami.asia/search?sort=rating.
+   * Sourced from https://s1.shinigami.mx/search?sort=rating.
    * @param {number} [page=1] Page number
    */
   async getRating(page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const offset = this._pageToOffset(pageNum, this.pageSize);
 
     const res = await this._fetchApi('/manga/list', {
-      page: pageNum,
-      page_size: this.pageSize,
+      offset,
+      limit: this.pageSize,
       sort: 'rating',
       sort_order: 'desc',
     });
 
     const rawList = res.data || [];
     const data = rawList.map((item) => this._mapMangaItem(item));
-    const totalRecord = res.meta?.total_record || null;
-    const maxPage = res.meta?.total_page || (totalRecord ? Math.ceil(totalRecord / this.pageSize) : null);
+    const hasNextPage = res.meta?.has_next === true;
 
-    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
-      throw createNotFound(
-        `Halaman ${pageNum} tidak ditemukan${maxPage ? ` (maksimal halaman ${maxPage})` : ''}`,
-        'NOT_FOUND'
-      );
+    if (pageNum > 1 && data.length === 0) {
+      throw createNotFound(`Halaman ${pageNum} tidak ditemukan`, 'NOT_FOUND');
     }
 
-    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
     const pagination = formatPagination({
       page: pageNum,
-      maxPage,
+      maxPage: null,
       hasNextPage,
     });
 
@@ -339,14 +341,13 @@ class ShinigamiSource extends BaseSource {
       data,
       pagination,
       page: pageNum,
-      maxPage,
       hasNextPage,
     };
   }
 
   /**
    * Search manga in Shinigami.
-   * Sourced from https://id.shinigami.asia/search?q=:query.
+   * Sourced from https://s1.shinigami.mx/search?q=:query.
    * @param {string} query Search keyword
    * @param {number} [page=1] Page number
    */
@@ -357,31 +358,28 @@ class ShinigamiSource extends BaseSource {
     }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const offset = this._pageToOffset(pageNum, this.pageSize);
 
     const res = await this._fetchApi('/manga/list', {
-      page: pageNum,
-      page_size: this.pageSize,
+      offset,
+      limit: this.pageSize,
       q: rawQuery,
     });
 
     const rawList = res.data || [];
     const data = rawList.map((item) => this._mapMangaItem(item));
-    const totalRecord = res.meta?.total_record || null;
-    const maxPage = res.meta?.total_page || (totalRecord ? Math.ceil(totalRecord / this.pageSize) : null);
+    const hasNextPage = res.meta?.has_next === true;
 
-    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
+    if (pageNum > 1 && data.length === 0) {
       throw createNotFound(
-        `Halaman ${pageNum} tidak ditemukan untuk pencarian '${rawQuery}'${
-          maxPage ? ` (maksimal halaman ${maxPage})` : ''
-        }`,
+        `Halaman ${pageNum} tidak ditemukan untuk pencarian '${rawQuery}'`,
         'NOT_FOUND'
       );
     }
 
-    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
     const pagination = formatPagination({
       page: pageNum,
-      maxPage,
+      maxPage: null,
       hasNextPage,
     });
 
@@ -392,20 +390,20 @@ class ShinigamiSource extends BaseSource {
       data,
       pagination,
       page: pageNum,
-      maxPage,
       hasNextPage,
     };
   }
 
   /**
    * Get list of all available genres from Shinigami.
+   * Uses /taxonomy/list?type=genre endpoint.
    */
   async getGenres() {
     if (this._cachedGenres && Date.now() < this._cachedGenresExpiresAt) {
       return this._cachedGenres;
     }
 
-    const res = await this._fetchApi('/genre/list');
+    const res = await this._fetchApi('/taxonomy/list', { type: 'genre', offset: 0, limit: 100 });
     const rawList = res.data || [];
     const genres = [];
 
@@ -452,7 +450,7 @@ class ShinigamiSource extends BaseSource {
 
   /**
    * Get manga list filtered by genre from Shinigami.
-   * Sourced from https://id.shinigami.asia/genre/:genre.
+   * Sourced from https://s1.shinigami.mx/genre/:genre.
    * @param {string} genre Genre name or slug
    * @param {number} [page=1] Page number
    */
@@ -464,10 +462,11 @@ class ShinigamiSource extends BaseSource {
 
     const targetSlug = await this._resolveGenreSlug(rawGenre);
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const offset = this._pageToOffset(pageNum, this.pageSize);
 
     const res = await this._fetchApi('/manga/list', {
-      page: pageNum,
-      page_size: this.pageSize,
+      offset,
+      limit: this.pageSize,
       genre_include: targetSlug,
       genre_include_mode: 'and',
       sort: 'latest',
@@ -476,22 +475,18 @@ class ShinigamiSource extends BaseSource {
 
     const rawList = res.data || [];
     const data = rawList.map((item) => this._mapMangaItem(item));
-    const totalRecord = res.meta?.total_record || null;
-    const maxPage = res.meta?.total_page || (totalRecord ? Math.ceil(totalRecord / this.pageSize) : null);
+    const hasNextPage = res.meta?.has_next === true;
 
-    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
+    if (pageNum > 1 && data.length === 0) {
       throw createNotFound(
-        `Halaman ${pageNum} tidak ditemukan untuk genre '${rawGenre}'${
-          maxPage ? ` (maksimal halaman ${maxPage})` : ''
-        }`,
+        `Halaman ${pageNum} tidak ditemukan untuk genre '${rawGenre}'`,
         'NOT_FOUND'
       );
     }
 
-    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
     const pagination = formatPagination({
       page: pageNum,
-      maxPage,
+      maxPage: null,
       hasNextPage,
     });
 
@@ -502,7 +497,6 @@ class ShinigamiSource extends BaseSource {
       data,
       pagination,
       page: pageNum,
-      maxPage,
       hasNextPage,
     };
   }
@@ -516,7 +510,7 @@ class ShinigamiSource extends BaseSource {
 
   /**
    * Get manga list filtered by type from Shinigami.
-   * Sourced from https://id.shinigami.asia/format/:type.
+   * Sourced from https://s1.shinigami.mx/format/:type.
    * @param {string} type Manga type ('manga', 'manhwa', 'manhua')
    * @param {number} [page=1] Page number
    */
@@ -531,10 +525,11 @@ class ShinigamiSource extends BaseSource {
     }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const offset = this._pageToOffset(pageNum, this.pageSize);
 
     const res = await this._fetchApi('/manga/list', {
-      page: pageNum,
-      page_size: this.pageSize,
+      offset,
+      limit: this.pageSize,
       format: rawType,
       sort: 'latest',
       sort_order: 'desc',
@@ -542,22 +537,18 @@ class ShinigamiSource extends BaseSource {
 
     const rawList = res.data || [];
     const data = rawList.map((item) => this._mapMangaItem(item));
-    const totalRecord = res.meta?.total_record || null;
-    const maxPage = res.meta?.total_page || (totalRecord ? Math.ceil(totalRecord / this.pageSize) : null);
+    const hasNextPage = res.meta?.has_next === true;
 
-    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
+    if (pageNum > 1 && data.length === 0) {
       throw createNotFound(
-        `Halaman ${pageNum} tidak ditemukan untuk tipe '${rawType}'${
-          maxPage ? ` (maksimal halaman ${maxPage})` : ''
-        }`,
+        `Halaman ${pageNum} tidak ditemukan untuk tipe '${rawType}'`,
         'NOT_FOUND'
       );
     }
 
-    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
     const pagination = formatPagination({
       page: pageNum,
-      maxPage,
+      maxPage: null,
       hasNextPage,
     });
 
@@ -568,7 +559,6 @@ class ShinigamiSource extends BaseSource {
       data,
       pagination,
       page: pageNum,
-      maxPage,
       hasNextPage,
     };
   }
@@ -580,20 +570,22 @@ class ShinigamiSource extends BaseSource {
    */
   async getList(page = 1, options = {}) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const offset = this._pageToOffset(pageNum, this.pageSize);
     const params = {
-      page: pageNum,
-      page_size: this.pageSize,
+      offset,
+      limit: this.pageSize,
     };
 
-    if (options.sort) {
-      const s = String(options.sort).toLowerCase();
-      if (s === 'oldest') {
-        params.sort = 'latest';
-        params.sort_order = 'asc';
-      } else if (['latest', 'popularity', 'popular', 'rating'].includes(s)) {
-        params.sort = s === 'popular' ? 'popularity' : s;
-        params.sort_order = 'desc';
-      }
+    const sortInput = options.sort ? String(options.sort).toLowerCase() : 'latest';
+    if (sortInput === 'oldest') {
+      params.sort = 'latest';
+      params.sort_order = 'asc';
+    } else if (sortInput === 'popular' || sortInput === 'popularity') {
+      params.sort = 'popularity';
+      params.sort_order = 'desc';
+    } else if (sortInput === 'rating') {
+      params.sort = 'rating';
+      params.sort_order = 'desc';
     } else {
       params.sort = 'latest';
       params.sort_order = 'desc';
@@ -623,20 +615,15 @@ class ShinigamiSource extends BaseSource {
     const res = await this._fetchApi('/manga/list', params);
     const rawList = res.data || [];
     const data = rawList.map((item) => this._mapMangaItem(item));
-    const totalRecord = res.meta?.total_record || null;
-    const maxPage = res.meta?.total_page || (totalRecord ? Math.ceil(totalRecord / this.pageSize) : null);
+    const hasNextPage = res.meta?.has_next === true;
 
-    if (pageNum > 1 && ((maxPage && pageNum > maxPage) || data.length === 0)) {
-      throw createNotFound(
-        `Halaman ${pageNum} tidak ditemukan${maxPage ? ` (maksimal halaman ${maxPage})` : ''}`,
-        'NOT_FOUND'
-      );
+    if (pageNum > 1 && data.length === 0) {
+      throw createNotFound(`Halaman ${pageNum} tidak ditemukan`, 'NOT_FOUND');
     }
 
-    const hasNextPage = maxPage ? pageNum < maxPage : data.length === this.pageSize;
     const pagination = formatPagination({
       page: pageNum,
-      maxPage,
+      maxPage: null,
       hasNextPage,
     });
 
@@ -650,7 +637,6 @@ class ShinigamiSource extends BaseSource {
       data,
       pagination,
       page: pageNum,
-      maxPage,
       hasNextPage,
     };
   }
@@ -687,7 +673,9 @@ class ShinigamiSource extends BaseSource {
 
     const title = detail.title;
     const altTitle = detail.alternative_title || null;
-    const cover = detail.cover_portrait_url || detail.cover_image_url || null;
+    const cover = (detail.cover_portrait_url && detail.cover_portrait_url.trim())
+      || (detail.cover_image_url && detail.cover_image_url.trim())
+      || null;
     const synopsis = detail.description ? detail.description.trim() : null;
 
     let author = null;
@@ -720,16 +708,32 @@ class ShinigamiSource extends BaseSource {
         })).filter((g) => g.name && g.slug)
       : [];
 
-    // Fetch chapters list
+    // Fetch all chapters — new API uses offset+limit (max ~500 per request)
     let rawChapters = [];
     try {
       const chRes = await this._fetchApi(`/chapter/${mangaId}/list`, {
-        page: 1,
-        page_size: 9999,
+        offset: 0,
+        limit: 500,
         sort_by: 'chapter_number',
         sort_order: 'desc',
       });
       rawChapters = Array.isArray(chRes.data) ? chRes.data : [];
+
+      // If there are more chapters, paginate
+      let hasMore = chRes.meta?.has_next === true;
+      let currentOffset = 500;
+      while (hasMore) {
+        const nextRes = await this._fetchApi(`/chapter/${mangaId}/list`, {
+          offset: currentOffset,
+          limit: 500,
+          sort_by: 'chapter_number',
+          sort_order: 'desc',
+        });
+        const nextChapters = Array.isArray(nextRes.data) ? nextRes.data : [];
+        rawChapters = rawChapters.concat(nextChapters);
+        hasMore = nextRes.meta?.has_next === true;
+        currentOffset += 500;
+      }
     } catch (_) {}
 
     const chapters = rawChapters.map((ch) => {
@@ -762,47 +766,41 @@ class ShinigamiSource extends BaseSource {
       };
     });
 
-    // Fetch similar comics based on primary genre or format
+    // Fetch similar comics from dedicated endpoint
     const similar = [];
     try {
-      const primaryGenreSlug = detail.taxonomy?.Genre?.[0]?.slug;
-      const queryParams = {
-        page: 1,
-        page_size: 6,
-        sort: 'popularity',
-        sort_order: 'desc',
-      };
-      if (primaryGenreSlug) {
-        queryParams.genre_include = primaryGenreSlug;
-        queryParams.genre_include_mode = 'and';
-      } else if (type) {
-        queryParams.format = type;
-      }
+      const simRes = await this._fetchApi(`/manga/${mangaId}/similar`);
+      const simList = Array.isArray(simRes.data?.mangas) ? simRes.data.mangas : [];
+      for (const sim of simList.slice(0, 6)) {
+        if (!sim.manga_id) continue;
 
-      const similarRaw = await this._fetchApi('/manga/list', queryParams);
-      const simList = Array.isArray(similarRaw.data) ? similarRaw.data : [];
-      for (const sim of simList) {
-        if (sim.manga_id !== mangaId && similar.length < 5) {
-          let simType = null;
-          if (sim.taxonomy?.Format && sim.taxonomy.Format.length > 0) {
-            simType = sim.taxonomy.Format[0].slug;
-          } else if (sim.country_id === 'KR') {
-            simType = 'manhwa';
-          } else if (sim.country_id === 'CN') {
-            simType = 'manhua';
-          }
+        let simType = null;
+        if (sim.country_id === 'KR') simType = 'manhwa';
+        else if (sim.country_id === 'CN') simType = 'manhua';
+        else if (sim.country_id === 'JP') simType = 'manga';
 
-          const simSlug = this._slugify(sim.title) || sim.manga_id;
-          similar.push({
-            id: sim.manga_id,
-            manga_id: sim.manga_id,
-            title: sim.title,
-            slug: simSlug,
-            cover: sim.cover_portrait_url || sim.cover_image_url || null,
-            type: simType,
-            rating: typeof sim.user_rate === 'number' ? sim.user_rate : null,
-          });
+        let simStatus = null;
+        if (sim.status === 1) simStatus = 'ongoing';
+        else if (sim.status === 2) simStatus = 'completed';
+        else if (sim.status === 3) simStatus = 'hiatus';
+
+        const simSlug = this._slugify(sim.title) || sim.manga_id;
+        if (simSlug && sim.manga_id) {
+          this._slugToIdMap.set(simSlug, sim.manga_id);
         }
+
+        similar.push({
+          id: sim.manga_id,
+          manga_id: sim.manga_id,
+          title: sim.title || null,
+          slug: simSlug,
+          cover: (sim.cover_portrait_url && sim.cover_portrait_url.trim())
+            || (sim.cover_image_url && sim.cover_image_url.trim())
+            || null,
+          type: simType,
+          status: simStatus,
+          rating: typeof sim.user_rate === 'number' ? sim.user_rate : null,
+        });
       }
     } catch (_) {}
 
@@ -813,8 +811,6 @@ class ShinigamiSource extends BaseSource {
 
     return {
       id: mangaId,
-      manga_id: mangaId,
-      mangaId: mangaId,
       source: this.name,
       title,
       slug: itemSlug,
@@ -836,7 +832,7 @@ class ShinigamiSource extends BaseSource {
    * Get chapter image pages from Shinigami.
    * @param {string} slug Manga UUID or slug (e.g. 'nano-machine' or 'd3b05787-4c8e-42bb-ba9a-6b2fafd92f3c')
    * @param {string|number} chapter Chapter number or UUID
-   * @param {string} [cdn='cdn1'] CDN identifier (unused for Shinigami)
+   * @param {number} [server=1] Server number (unused, Shinigami now has single CDN)
    */
   async getPages(slug, chapter, server = 1) {
     const cleanSlug = String(slug || '').replace(/^\/+|\/+$/g, '').split('/')[0];
@@ -845,26 +841,25 @@ class ShinigamiSource extends BaseSource {
       throw createBadRequest("Parameter 'slug' dan 'chapter' wajib diisi", 'INVALID_PARAMETER');
     }
 
-    const serverNum = parseInt(server, 10);
-    const cleanServer = [1, 2, 3, 4].includes(serverNum) ? serverNum : 1;
-
     const mangaId = await this._resolveMangaId(cleanSlug);
     if (!mangaId) {
       throw createNotFound(`Manga '${cleanSlug}' tidak ditemukan`, 'NOT_FOUND');
     }
 
     // Fetch chapters list to find target chapter_id
+    // Use offset-based pagination to fetch enough chapters
     const chRes = await this._fetchApi(`/chapter/${mangaId}/list`, {
-      page: 1,
-      page_size: 9999,
+      offset: 0,
+      limit: 500,
       sort_by: 'chapter_number',
       sort_order: 'desc',
     });
 
-    const rawChapters = Array.isArray(chRes.data) ? chRes.data : [];
-    const cleanChapterInput = rawChapter.toLowerCase().replace(/^chapter-?/i, '');
+    let rawChapters = Array.isArray(chRes.data) ? chRes.data : [];
 
-    const targetChapter = rawChapters.find((ch) => {
+    // If chapter not found in first 500 and there are more, keep paginating
+    const cleanChapterInput = rawChapter.toLowerCase().replace(/^chapter-?/i, '');
+    let targetChapter = rawChapters.find((ch) => {
       if (ch.chapter_id === rawChapter) return true;
       if (String(ch.chapter_number) === rawChapter) return true;
       if (String(ch.chapter_number) === cleanChapterInput) return true;
@@ -872,18 +867,43 @@ class ShinigamiSource extends BaseSource {
       return false;
     });
 
+    if (!targetChapter && chRes.meta?.has_next === true) {
+      let currentOffset = 500;
+      let hasMore = true;
+      while (!targetChapter && hasMore) {
+        const nextRes = await this._fetchApi(`/chapter/${mangaId}/list`, {
+          offset: currentOffset,
+          limit: 500,
+          sort_by: 'chapter_number',
+          sort_order: 'desc',
+        });
+        const nextChapters = Array.isArray(nextRes.data) ? nextRes.data : [];
+        targetChapter = nextChapters.find((ch) => {
+          if (ch.chapter_id === rawChapter) return true;
+          if (String(ch.chapter_number) === rawChapter) return true;
+          if (String(ch.chapter_number) === cleanChapterInput) return true;
+          if (ch.chapter_title && ch.chapter_title.toLowerCase() === rawChapter.toLowerCase()) return true;
+          return false;
+        });
+        hasMore = nextRes.meta?.has_next === true;
+        currentOffset += 500;
+      }
+    }
+
     if (!targetChapter) {
       throw createNotFound(`Chapter '${rawChapter}' tidak ditemukan untuk manga '${cleanSlug}'`, 'NOT_FOUND');
     }
 
-    const detailRes = await this._fetchApi(`/chapter/detail/${targetChapter.chapter_id}`, { server: cleanServer });
+    const detailRes = await this._fetchApi(`/chapter/detail/${targetChapter.chapter_id}`);
     const chapterData = detailRes.data?.chapter;
     if (!chapterData || !Array.isArray(chapterData.data)) {
       throw createBadGateway('Data halaman chapter dari Shinigami tidak lengkap', 'UPSTREAM_ERROR');
     }
 
-    // Use cdnServers mapping — API base_url is unreliable (always returns assets.shngm.id)
-    const cdnBase = `https://${this.cdnServers[cleanServer] || this.cdnDomain}`;
+    // Use base_url from API response (now reliable: cdn.shinigami.gg)
+    const cdnBase = detailRes.data.base_url
+      ? detailRes.data.base_url.replace(/\/$/, '')
+      : `https://${this.cdnDomain}`;
 
     const basePath = chapterData.path.endsWith('/') ? chapterData.path : `${chapterData.path}/`;
     const pages = chapterData.data.map((imgFile, index) => {
@@ -905,24 +925,10 @@ class ShinigamiSource extends BaseSource {
     return {
       source: this.name,
       title: `${mangaTitle} Chapter ${chapterNum}`,
-      server: cleanServer,
+      server: 1,
       totalPages: pages.length,
       pages,
     };
-  }
-
-  /**
-   * Get supported sort options for Shinigami.
-   * Shinigami supports latest, popular, dan rating via /manga/list.
-   * Shinigami does NOT have alphabetical /az endpoint.
-   */
-  getSupportedSorts() {
-    return [
-      { id: 'latest', name: 'Terbaru' },
-      { id: 'oldest', name: 'Terlama' },
-      { id: 'popular', name: 'Populer' },
-      { id: 'rating', name: 'Rating' },
-    ];
   }
 }
 

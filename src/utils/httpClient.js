@@ -69,3 +69,46 @@ module.exports = {
   getJson,
   getHtml,
 };
+
+// ─── CF-protected fetch ───────────────────────────────────────────────────────
+
+/**
+ * Fetch HTML from a Cloudflare-protected page using cf-clearance-scraper.
+ * Automatically obtains/reuses cf_clearance cookie + matching User-Agent.
+ * On 403, invalidates session and retries once.
+ *
+ * @param {string} url
+ * @param {object} [options]  Same as fetchWithHeaders options
+ */
+async function getHtmlCf(url, options = {}) {
+  const { getSession, invalidateSession } = require('./cfSession');
+
+  let session = await getSession(url);
+
+  const cfHeaders = {
+    'User-Agent': session.userAgent,
+    Cookie: session.cookieHeader,
+    Referer: new URL(url).origin + '/',
+    ...options.headers,
+  };
+
+  try {
+    return await getHtml(url, { ...options, headers: cfHeaders });
+  } catch (err) {
+    // 403 → session expired, refresh once and retry
+    if (err.statusCode === 403) {
+      invalidateSession(url);
+      session = await getSession(url, true);
+      const retryHeaders = {
+        'User-Agent': session.userAgent,
+        Cookie: session.cookieHeader,
+        Referer: new URL(url).origin + '/',
+        ...options.headers,
+      };
+      return await getHtml(url, { ...options, headers: retryHeaders });
+    }
+    throw err;
+  }
+}
+
+module.exports.getHtmlCf = getHtmlCf;

@@ -381,41 +381,91 @@ class CgbumSource extends BaseSource {
 
     let chapterUrl;
     if (rawSlug.startsWith('http')) {
-      // Full URL passed directly (from endpoint field in chapters)
       chapterUrl = rawSlug;
     } else if (chapter) {
-      // slug + chapter number → construct URL
       chapterUrl = `${this.baseUrl}/baca/${rawSlug}/chapter/${chapter}`;
     } else {
       throw createBadRequest("Parameter 'chapter' wajib diisi", 'INVALID_PARAMETER');
     }
 
-    let html;
-    try {
-      html = await getHtml(chapterUrl, { headers: { Referer: `${this.baseUrl}/` } });
-    } catch (err) {
-      if (err.statusCode === 404) throw createNotFound('Chapter tidak ditemukan di CGBUM', 'NOT_FOUND');
-      throw err;
-    }
+    const { withPage } = require('../../utils/browserClient');
 
-    const $ = cheerio.load(html);
+    const pages = await withPage(async (page) => {
+      const collectedUrls = [];
 
-    // Images are in .page-container[data-url]
-    const pages = [];
-    $('.page-container[data-url]').each((_, el) => {
-      const imgUrl = $(el).attr('data-url') || '';
-      if (!imgUrl) return;
-      pages.push(imgUrl);
-    });
+      // Intercept responses from reader-access.php — this is where image URLs are delivered
+      page.on('response', async (response) => {
+        const url = response.url();
+        if (!url.includes('reader-access.php')) return;
+        try {
+          const json = await response.json();
+          // Response shape: { images: [{ url, path }] } or { pages: [...] }
+          const imgs = json?.images || json?.pages || json?.data || [];
+          if (Array.isArray(imgs)) {
+            for (const img of imgs) {
+              const imgUrl = typeof img === 'string' ? img : (img?.url || img?.src || null);
+              if (imgUrl) collectedUrls.push(imgUrl);
+            }
+          }
+        } catch (_) {}
+      });
+
+      await page.goto(chapterUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+
+      // Wait for page-container elements to exist
+      await page.waitForSelector('.page-container', { timeout: 30000 }).catch(() => null);
+
+      // Give JS time to complete proof-of-work and load images
+      // Proof-of-work can take several seconds
+      await page.waitForFunction(
+        () => {
+          const containers = document.querySelectorAll('.page-container');
+          if (!containers.length) return false;
+          // Check if at least one image has loaded (has a src set by JS)
+          const imgs = document.querySelectorAll('.page-container img[src]:not([src=""])');
+          return imgs.length > 0;
+        },
+        { timeout: 60000, polling: 1000 }
+      ).catch(() => null);
+
+      // Extra wait for remaining images to populate
+      await new Promise((r) => setTimeout(r, 2000));
+
+      // Collect image URLs from DOM as fallback / complement
+      const domUrls = await page.evaluate(() => {
+        const urls = [];
+        document.querySelectorAll('.page-container').forEach((container) => {
+          // Try data-url attribute first (may be populated by JS)
+          const dataUrl = container.getAttribute('data-url') || container.getAttribute('data-path');
+          if (dataUrl && dataUrl.trim()) { urls.push(dataUrl.trim()); return; }
+          // Try img src inside container
+          const img = container.querySelector('img');
+          if (img) {
+            const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+            if (src && !src.startsWith('data:')) urls.push(src);
+          }
+        });
+        return urls;
+      });
+
+      // Merge: prefer network-intercepted URLs, fall back to DOM
+      const merged = collectedUrls.length ? collectedUrls : domUrls;
+      return merged.filter(Boolean);
+    }, { referer: `${this.baseUrl}/` });
 
     if (!pages.length) {
-      throw createBadGateway('Tidak ada gambar untuk chapter ini di CGBUM', 'UPSTREAM_ERROR');
+      throw createBadGateway(
+        'Tidak ada gambar yang berhasil dimuat dari chapter ini di CGBUM.',
+        'UPSTREAM_ERROR'
+      );
     }
 
-    const pageTitle = $('title').text()
-      .replace(/\s*Bahasa Indonesia\s*/gi, '')
-      .replace(/\s*[-–|]\s*CGBUM.*$/i, '')
-      .replace(/^Baca\s+/i, '')
+    const pageTitle = chapterUrl
+      .replace(`${this.baseUrl}/baca/`, '')
+      .replace(/\/chapter\//, ' Chapter ')
+      .split('/')[0]
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
       .trim();
 
     return {

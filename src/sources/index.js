@@ -36,6 +36,9 @@ const ShiroDoujinSource = require('./shirodoujin/ShiroDoujinSource');
 const KomikApkSource = require('./komikapk/KomikApkSource');
 const FanfoxSource = require('./fanfox/FanfoxSource');
 const MangapillSource = require('./mangapill/MangapillSource');
+const DojingSource = require('./dojing/DojingSource');
+const ManhwalandSource = require('./manhwaland/ManhwalandSource');
+const SxkomikSource = require('./sxkomik/SxkomikSource');
 
 const sources = new Map();
 
@@ -113,6 +116,9 @@ registerSource(new ShiroDoujinSource());
 registerSource(new KomikApkSource());
 registerSource(new FanfoxSource());
 registerSource(new MangapillSource());
+registerSource(new DojingSource());
+registerSource(new ManhwalandSource());
+registerSource(new SxkomikSource());
 
 module.exports = {
   registerSource,

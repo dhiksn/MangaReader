@@ -14,6 +14,7 @@ class DoujindesuSource extends BaseSource {
     this.pageSize = 24;
     this.sorts = [
       { id: 'latest', name: 'Terbaru' },
+      { id: 'newest', name: 'Diperbarui' },
       { id: 'oldest', name: 'Terlama' },
       { id: 'popular', name: 'Populer' },
       { id: 'az', name: 'A-Z' },
@@ -272,6 +273,7 @@ class DoujindesuSource extends BaseSource {
   getSupportedSorts() {
     return [
       { id: 'latest', name: 'Terbaru' },
+      { id: 'newest', name: 'Diperbarui' },
       { id: 'oldest', name: 'Terlama' },
       { id: 'popular', name: 'Populer' },
       { id: 'az', name: 'A-Z' },
@@ -301,6 +303,9 @@ class DoujindesuSource extends BaseSource {
       case 'az':
       case 'title_asc':
         mappedSort = 'title_asc';
+        break;
+      case 'newest':
+        mappedSort = 'newest';
         break;
       case 'latest':
       case 'latest_chapter':
@@ -416,6 +421,16 @@ class DoujindesuSource extends BaseSource {
    */
   async getLatest(page = 1, options = {}) {
     return this.getList(page, { ...options, sort: 'latest' });
+  }
+
+  /**
+   * Get newest added manga from DoujinDesu (sorted by created_at).
+   * Sourced from https://doujin.desu.xxx/explore?sort=newest.
+   * @param {number} [page=1] Page number
+   * @param {Object} [options={}] Additional query options
+   */
+  async getNewest(page = 1, options = {}) {
+    return this.getList(page, { ...options, sort: 'newest' });
   }
 
   /**

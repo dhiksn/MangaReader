@@ -1,6 +1,6 @@
 const cheerio = require('cheerio');
 const BaseSource = require('../BaseSource');
-const { getHtml } = require('../../utils/httpClient');
+const { getHtml, getHtmlCf } = require('../../utils/httpClient');
 const { createNotFound, createBadRequest, createBadGateway } = require('../../utils/errors');
 
 class KomikRemajaSource extends BaseSource {
@@ -73,7 +73,6 @@ class KomikRemajaSource extends BaseSource {
 
       const cover = $(el).find('img').first().attr('src') || null;
 
-      // Type from "typename Manhwa" class
       const typeClass = $(el).find('span[class*="typename"]').attr('class') || '';
       const typeMatch = typeClass.match(/\btypename\s+(\S+)/i);
       const type = typeMatch ? typeMatch[1].toLowerCase() : null;
@@ -152,13 +151,17 @@ class KomikRemajaSource extends BaseSource {
     return { source: this.name, page: pageNum, maxPage, hasNextPage, data };
   }
 
+  /**
+   * Search — uses cf-clearance-scraper because /?s= is protected by CF Turnstile.
+   */
   async search(query, page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const q = encodeURIComponent(String(query || '').trim());
     const url = pageNum === 1
       ? `${this.baseUrl}/?s=${q}`
       : `${this.baseUrl}/page/${pageNum}/?s=${q}`;
-    const html = await getHtml(url, { headers: this._headers() });
+
+    const html = await getHtmlCf(url);
     const $ = cheerio.load(html);
     const data = this._parseCardList($);
     const { maxPage, hasNextPage } = this._parsePagination($, pageNum);
@@ -180,7 +183,6 @@ class KomikRemajaSource extends BaseSource {
       const rawLabel = $(`label[for="${id}"]`).text().trim() ||
                        $(el).next('label').text().trim() ||
                        $(el).closest('li').text().trim();
-      // Dedupe doubled labels e.g. "ActionAction"
       const half = Math.floor(rawLabel.length / 2);
       const label = rawLabel.slice(0, half) === rawLabel.slice(half) ? rawLabel.slice(0, half) : rawLabel;
       if (!label) return;
@@ -246,9 +248,7 @@ class KomikRemajaSource extends BaseSource {
 
     const title = $('h1.entry-title, h1').first().text().trim() || cleanSlug;
 
-    // Alt title from infotable "Alternative" row
     let altTitle = null;
-    // Also check .seriestualt
     const altEl = $('.seriestualt').text().trim();
     if (altEl) altTitle = altEl;
 
@@ -257,7 +257,6 @@ class KomikRemajaSource extends BaseSource {
     const synopsis = $('div.entry-content.entry-content-single p').first().text().trim() ||
                      $('[itemprop="description"] p').first().text().trim() || null;
 
-    // Metadata from infotable
     let status = null, type = null, author = null;
     $('.infotable tr').each((_, el) => {
       const tds = $(el).find('td');
@@ -285,7 +284,6 @@ class KomikRemajaSource extends BaseSource {
     const rating = ratingRaw && !isNaN(parseFloat(ratingRaw))
       ? Math.round(parseFloat(ratingRaw) * 100) / 100 : null;
 
-    // Genres
     const genres = [];
     const seenG = new Set();
     $('.mgen a, .seriestugenre a').each((_, el) => {
@@ -297,7 +295,6 @@ class KomikRemajaSource extends BaseSource {
       genres.push({ name, slug: m ? m[1] : name.toLowerCase().replace(/\s+/g, '-') });
     });
 
-    // Chapters
     const chapters = [];
     $('#chapterlist li, .eplister li').each((_, el) => {
       const a = $(el).find('.eph-num a, a').first();
@@ -313,7 +310,6 @@ class KomikRemajaSource extends BaseSource {
       });
     });
 
-    // Related from .bixbox "Related Series"
     const related = [];
     const seenR = new Set();
     $('.bixbox').each((_, box) => {
@@ -391,10 +387,7 @@ class KomikRemajaSource extends BaseSource {
 
     let tsData;
     try {
-      // ts_reader may contain JS literals (!0/!1) — convert to valid JSON
-      const cleaned = match[1]
-        .replace(/!0/g, 'true')
-        .replace(/!1/g, 'false');
+      const cleaned = match[1].replace(/!0/g, 'true').replace(/!1/g, 'false');
       tsData = JSON.parse(cleaned);
     } catch (err) {
       throw createBadGateway(`Gagal memproses data gambar: ${err.message}`, 'UPSTREAM_ERROR');
