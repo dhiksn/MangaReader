@@ -8,7 +8,7 @@ class DoujinkuSource extends BaseSource {
   constructor() {
     super('doujinku', 'Doujinku');
     this.baseUrl = 'https://doujinku.org';
-    this.icon = `${this.baseUrl}/favicon.ico`;
+    this.icon = `https://i2.wp.com/doujinku.org/wp-content/uploads/2024/08/cropped-fav-1-32x32.jpg`;
 
     this._cachedGenres = null;
     this._cachedGenresExpiresAt = 0;

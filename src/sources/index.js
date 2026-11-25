@@ -40,6 +40,7 @@ const DojingSource = require('./dojing/DojingSource');
 const ManhwalandSource = require('./manhwaland/ManhwalandSource');
 const SxkomikSource = require('./sxkomik/SxkomikSource');
 const DoujinkuSource = require('./doujinku/DoujinkuSource');
+const KomikmuSource = require('./komikmu/KomikmuSource');
 
 const sources = new Map();
 
@@ -121,6 +122,7 @@ registerSource(new DojingSource());
 registerSource(new ManhwalandSource());
 registerSource(new SxkomikSource());
 registerSource(new DoujinkuSource());
+registerSource(new KomikmuSource());
 
 module.exports = {
   registerSource,
