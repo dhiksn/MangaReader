@@ -326,6 +326,7 @@ class LuvyaaSource extends BaseSource {
       const numMatch = href.match(/chapter-([0-9.]+)\/?$/);
       const chNum = numMatch ? numMatch[1] : null;
       chapters.push({
+        chapter: chNum || chTitle,
         title: chTitle || `Chapter ${chNum}`,
         slug: href,
         endpoint: `/api/sources/${this.name}/chapter/${encodeURIComponent(href)}`,
@@ -377,7 +378,11 @@ class LuvyaaSource extends BaseSource {
     if (rawSlug.startsWith('http')) {
       chapterUrl = rawSlug;
     } else {
-      const chNum = String(chapter || '').replace(/^chapter-?/i, '');
+      let chNum = String(chapter || '').trim();
+      if (chNum.startsWith(`${rawSlug}-`)) {
+        chNum = chNum.substring(rawSlug.length + 1);
+      }
+      chNum = chNum.replace(/^chapter-?/i, '');
       chapterUrl = `${this.baseUrl}/${rawSlug}-chapter-${chNum}/`;
     }
 
