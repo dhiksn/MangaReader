@@ -101,7 +101,7 @@ class DoujinkuSource extends BaseSource {
   }
 
   async _fetchListing(url, pageNum) {
-    const html = await getHtml(url, { headers: this._headers() });
+    const html = await getHtmlCf(url);
     const $ = cheerio.load(html);
     const data = this._parseCardList($);
     const { maxPage, hasNextPage } = this._parsePagination($, pageNum);
@@ -185,7 +185,7 @@ class DoujinkuSource extends BaseSource {
   async getGenres() {
     if (this._cachedGenres && Date.now() < this._cachedGenresExpiresAt) return this._cachedGenres;
 
-    const html = await getHtml(`${this.baseUrl}/manga/?order=update`, { headers: this._headers() });
+    const html = await getHtmlCf(`${this.baseUrl}/manga/?order=update`);
     const $ = cheerio.load(html);
     const genres = [];
     const seen = new Set();
@@ -254,7 +254,7 @@ class DoujinkuSource extends BaseSource {
     const url = `${this.baseUrl}/manga/${cleanSlug}/`;
     let html;
     try {
-      html = await getHtml(url, { headers: this._headers() });
+      html = await getHtmlCf(url, { headers: this._headers() });
     } catch (err) {
       if (err.statusCode === 404) throw createNotFound(`Manga '${cleanSlug}' tidak ditemukan di Doujinku`, 'NOT_FOUND');
       throw err;
@@ -391,7 +391,7 @@ class DoujinkuSource extends BaseSource {
 
     let html;
     try {
-      html = await getHtml(chapterUrl, { headers: this._headers() });
+      html = await getHtmlCf(chapterUrl, { headers: this._headers() });
     } catch (err) {
       if (err.statusCode === 404) throw createNotFound('Chapter tidak ditemukan di Doujinku', 'NOT_FOUND');
       throw err;
