@@ -6,8 +6,8 @@ const { createNotFound, createBadRequest, createBadGateway } = require('../../ut
 class LuvyaaSource extends BaseSource {
   constructor() {
     super('luvyaa', 'Luvyaa');
-    this.baseUrl = 'https://v5.luvyaa.co';
-    this.icon = `https://v5.luvyaa.co/wp-content/uploads/2025/08/cropped-Icon-web-2-32x32.png`;
+    this.baseUrl = 'https://v6.luvyaa.co';
+    this.icon = `https://v6.luvyaa.co/wp-content/uploads/2025/08/cropped-Icon-web-2-32x32.png`;
 
     // Genres cache
     this._cachedGenres = null;
@@ -420,7 +420,7 @@ class LuvyaaSource extends BaseSource {
     const $ = cheerio.load(html);
     const pageTitle = $('title').text()
       .replace(/\s*[-–|]\s*Luvyaa.*$/i, '')
-      .replace(/\s*[-–|]\s*v5\..*/i, '')
+      .replace(/\s*[-–|]\s*v6\..*/i, '')
       .trim();
 
     return {
