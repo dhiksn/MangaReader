@@ -1,6 +1,6 @@
 const cheerio = require('cheerio');
 const BaseSource = require('../BaseSource');
-const { getHtml } = require('../../utils/httpClient');
+const { getHtml, getHtmlCf } = require('../../utils/httpClient');
 const { createNotFound, createBadRequest, createBadGateway } = require('../../utils/errors');
 
 class LuvyaaSource extends BaseSource {
@@ -95,7 +95,7 @@ class LuvyaaSource extends BaseSource {
   }
 
   async _fetchListing(url, pageNum) {
-    const html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+    const html = await getHtmlCf(url);
     const $ = cheerio.load(html);
     const data = this._parseCardList($);
     const { maxPage, hasNextPage } = this._parsePagination($, pageNum);
@@ -169,7 +169,7 @@ class LuvyaaSource extends BaseSource {
     const url = pageNum === 1
       ? `${this.baseUrl}/?s=${q}`
       : `${this.baseUrl}/page/${pageNum}/?s=${q}`;
-    const html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+    const html = await getHtmlCf(url);
     const $ = cheerio.load(html);
     const data = this._parseCardList($);
     const { maxPage, hasNextPage } = this._parsePagination($, pageNum);
@@ -181,9 +181,7 @@ class LuvyaaSource extends BaseSource {
       return this._cachedGenres;
     }
 
-    const html = await getHtml(`${this.baseUrl}/manga/?order=update`, {
-      headers: { Referer: `${this.baseUrl}/` },
-    });
+    const html = await getHtmlCf(`${this.baseUrl}/manga/?order=update`);
     const $ = cheerio.load(html);
     const genres = [];
     const seen = new Set();
@@ -229,7 +227,7 @@ class LuvyaaSource extends BaseSource {
     const type = options.type ? `&type=${encodeURIComponent(String(options.type).toLowerCase())}` : '';
     const url = `${this.baseUrl}/manga/?${genreParams}&order=${order}${status}${type}&page=${pageNum}`;
 
-    const html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+    const html = await getHtmlCf(url);
     const $ = cheerio.load(html);
     const data = this._parseCardList($);
     const { maxPage, hasNextPage } = this._parsePagination($, pageNum);
@@ -266,7 +264,7 @@ class LuvyaaSource extends BaseSource {
     const url = `${this.baseUrl}/${cleanSlug}/`;
     let html;
     try {
-      html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+      html = await getHtmlCf(url);
     } catch (err) {
       if (err.statusCode === 404) throw createNotFound(`Manga '${cleanSlug}' tidak ditemukan di Luvyaa`, 'NOT_FOUND');
       throw err;
@@ -385,7 +383,7 @@ class LuvyaaSource extends BaseSource {
 
     let html;
     try {
-      html = await getHtml(chapterUrl, { headers: { Referer: `${this.baseUrl}/` } });
+      html = await getHtmlCf(chapterUrl, { headers: { Referer: `${this.baseUrl}/` } });
     } catch (err) {
       if (err.statusCode === 404) throw createNotFound(`Chapter tidak ditemukan di Luvyaa`, 'NOT_FOUND');
       throw err;
