@@ -383,7 +383,7 @@ class LuvyaaSource extends BaseSource {
 
     let html;
     try {
-      html = await getHtmlCf(chapterUrl, { headers: { Referer: `${this.baseUrl}/` } });
+      html = await getHtmlCf(chapterUrl);
     } catch (err) {
       if (err.statusCode === 404) throw createNotFound(`Chapter tidak ditemukan di Luvyaa`, 'NOT_FOUND');
       throw err;

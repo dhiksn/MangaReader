@@ -9,7 +9,7 @@ class MangapillSource extends BaseSource {
   constructor() {
     super('mangapill', 'MangaPill');
     this.baseUrl = 'https://mangapill.com';
-    this.icon = `${this.baseUrl}/favicon.ico`;
+    this.icon = `https://mangapill.com/static/favicon/favicon.ico`;
     this._cachedGenres = null;
     this._cachedGenresExpiresAt = 0;
   }

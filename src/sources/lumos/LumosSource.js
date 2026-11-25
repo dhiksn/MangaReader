@@ -7,7 +7,7 @@ class LumosSource extends BaseSource {
   constructor() {
     super('lumos', 'LumosKomik');
     this.baseUrl = 'https://03.lumosgg.com';
-    this.icon = 'https://lms.imgsvr.my.id/file/site-icon/JIvDoypQPySSuG.webp';
+    this.icon = 'https://lms.imgsvr.my.id/site-icon/JIvDoypQPySSuG.webp';
 
     // Genres cache
     this._cachedGenres = null;

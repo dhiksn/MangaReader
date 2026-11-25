@@ -10,7 +10,7 @@ class SxkomikSource extends BaseSource {
   constructor() {
     super('sxkomik', 'SXKomik');
     this.baseUrl = 'https://www.sxkomik.art';
-    this.icon = `${this.baseUrl}/favicon.ico`;
+    this.icon = `https://www.sxkomik.art/icon-192x192.png`;
   }
 
   getSupportedSorts() {
