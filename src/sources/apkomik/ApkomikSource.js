@@ -1,6 +1,6 @@
 const cheerio = require('cheerio');
 const BaseSource = require('../BaseSource');
-const { getHtml } = require('../../utils/httpClient');
+const { getHtml, getHtmlCf } = require('../../utils/httpClient');
 const { createNotFound, createBadRequest, createBadGateway } = require('../../utils/errors');
 
 class ApkomikSource extends BaseSource {
@@ -17,7 +17,7 @@ class ApkomikSource extends BaseSource {
   getSupportedSorts() {
     return [
       { id: 'latest', name: 'Terbaru' },
-      { id: 'newest', name: 'Terbaru Ditambahkan' },
+      { id: 'newest', name: 'Diperbarui' },
       { id: 'popular', name: 'Populer' },
       { id: 'az', name: 'A-Z' },
       { id: 'za', name: 'Z-A' },
@@ -86,7 +86,7 @@ class ApkomikSource extends BaseSource {
 
   /** Fetch a listing page and parse cards + pagination. */
   async _fetchListing(url, pageNum) {
-    const html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+    const html = await getHtmlCf(url);
     const $ = cheerio.load(html);
     const data = this._parseCardList($);
     const { hasNextPage, maxPage } = this._parsePagination($);
@@ -164,7 +164,7 @@ class ApkomikSource extends BaseSource {
       pageNum === 1
         ? `${this.baseUrl}/?s=${q}`
         : `${this.baseUrl}/page/${pageNum}/?s=${q}`;
-    const html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+    const html = await getHtmlCf(url);
     const $ = cheerio.load(html);
     const data = this._parseCardList($);
     const { hasNextPage, maxPage } = this._parsePagination($);
@@ -187,9 +187,7 @@ class ApkomikSource extends BaseSource {
       return this._cachedGenres;
     }
 
-    const html = await getHtml(`${this.baseUrl}/manga/`, {
-      headers: { Referer: `${this.baseUrl}/` },
-    });
+    const html = await getHtmlCf(`${this.baseUrl}/manga/`);
     const $ = cheerio.load(html);
     const genres = [];
     const seen = new Set();
@@ -233,7 +231,7 @@ class ApkomikSource extends BaseSource {
 
     const genreParams = found.map((g) => `genre%5B%5D=${g.id}`).join('&');
     const url = `${this.baseUrl}/manga/?${genreParams}&order=${order}&page=${pageNum}`;
-    const html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+    const html = await getHtmlCf(url);
     const $ = cheerio.load(html);
     const data = this._parseCardList($);
     const { hasNextPage, maxPage } = this._parsePagination($);
@@ -270,7 +268,7 @@ class ApkomikSource extends BaseSource {
     const url = `${this.baseUrl}/manga/${cleanSlug}/`;
     let html;
     try {
-      html = await getHtml(url, { headers: { Referer: `${this.baseUrl}/` } });
+      html = await getHtmlCf(url);
     } catch (err) {
       if (err.statusCode === 404) {
         throw createNotFound(`Manga '${cleanSlug}' tidak ditemukan di Apkomik`, 'NOT_FOUND');
@@ -440,7 +438,7 @@ class ApkomikSource extends BaseSource {
 
     let html;
     try {
-      html = await getHtml(chapterUrl, { headers: { Referer: `${this.baseUrl}/` } });
+      html = await getHtmlCf(chapterUrl);
     } catch (err) {
       if (err.statusCode === 404) {
         throw createNotFound(`Chapter tidak ditemukan di Apkomik: ${chapterUrl}`, 'NOT_FOUND');

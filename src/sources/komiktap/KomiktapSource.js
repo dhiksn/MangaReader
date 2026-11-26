@@ -206,11 +206,11 @@ class KomiktapSource extends BaseSource {
       }
     }
 
-    return {
+    return formatPagination({
       page: currentPage,
-      ...(maxPage ? { maxPage } : {}),
+      maxPage,
       hasNextPage,
-    };
+    });
   }
 
   /**

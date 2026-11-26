@@ -38,6 +38,7 @@ class DojingSource extends BaseSource {
   _resolveOrder(raw) {
     const map = {
       update:  'update',
+      latest:  'latest',
       popular: 'popular',
       az:      'title',
       title:   'title',
@@ -48,13 +49,36 @@ class DojingSource extends BaseSource {
   }
 
   _parsePagination($, currentPage) {
-    let maxPage = currentPage;
+    let maxPage = null;
+    let hasNextPage = false;
+
+    // 1. Check .pagination (present on search results)
+    const paginationEl = $('.pagination').first();
+    if (paginationEl.length > 0) {
+      paginationEl.find('a.page-numbers, span.page-numbers').each((_, el) => {
+        const n = parseInt($(el).text().trim(), 10);
+        if (!isNaN(n) && (maxPage === null || n > maxPage)) maxPage = n;
+      });
+      hasNextPage = paginationEl.find('a.next, a.next.page-numbers, a:contains("Berikutnya"), a:contains("Next")').length > 0;
+      if (hasNextPage && (maxPage === null || maxPage <= currentPage)) {
+        maxPage = currentPage + 1;
+      }
+      return { maxPage, hasNextPage };
+    }
+
+    // 2. Check .hpage (present on /manga/ catalog)
+    const hpageEl = $('.hpage').first();
+    if (hpageEl.length > 0) {
+      hasNextPage = hpageEl.find('a.r, a:contains("Next")').length > 0;
+      return { maxPage: null, hasNextPage };
+    }
+
+    // Fallback: check general page elements
     $('a.page-numbers').each((_, el) => {
       const n = parseInt($(el).text().trim(), 10);
-      if (!isNaN(n) && n > maxPage) maxPage = n;
+      if (!isNaN(n) && (maxPage === null || n > maxPage)) maxPage = n;
     });
-    const hasNextPage = $('a.next.page-numbers').length > 0;
-    if (hasNextPage && maxPage <= currentPage) maxPage = currentPage + 1;
+    hasNextPage = $('a.r, a.next, a:contains("Next")').length > 0;
     return { maxPage, hasNextPage };
   }
 
@@ -92,10 +116,8 @@ class DojingSource extends BaseSource {
   }
 
   _listUrl(pageNum, order, extra = '') {
-    const base = pageNum === 1
-      ? `${this.baseUrl}/manga/`
-      : `${this.baseUrl}/manga/page/${pageNum}/`;
-    return `${base}?order=${order}${extra}`;
+    const pageParam = pageNum > 1 ? `&page=${pageNum}` : '';
+    return `${this.baseUrl}/manga/?order=${order}${pageParam}${extra}`;
   }
 
   async _fetchListing(url, pageNum) {
@@ -200,10 +222,8 @@ class DojingSource extends BaseSource {
     });
 
     const genreParams = found.map((g) => `genre%5B%5D=${g.id}`).join('&');
-    const base = pageNum === 1
-      ? `${this.baseUrl}/manga/`
-      : `${this.baseUrl}/manga/page/${pageNum}/`;
-    const url = `${base}?${genreParams}&order=${order}`;
+    const pageParam = pageNum > 1 ? `&page=${pageNum}` : '';
+    const url = `${this.baseUrl}/manga/?${genreParams}&order=${order}${pageParam}`;
     const { data, maxPage, hasNextPage } = await this._fetchListing(url, pageNum);
     return { source: this.name, genre: found.map((g) => g.name).join(', '), page: pageNum, maxPage, hasNextPage, data };
   }

@@ -46,13 +46,37 @@ class MihentaiSource extends BaseSource {
   }
 
   _parsePagination($, currentPage) {
-    let maxPage = currentPage;
+    let maxPage = null;
+    let hasNextPage = false;
+
+    // 1. Check .pagination (present on search results)
+    const paginationEl = $('.pagination').first();
+    if (paginationEl.length > 0) {
+      paginationEl.find('a.page-numbers, span.page-numbers').each((_, el) => {
+        const n = parseInt($(el).text().trim(), 10);
+        if (!isNaN(n) && (maxPage === null || n > maxPage)) maxPage = n;
+      });
+      hasNextPage = paginationEl.find('a.next, a.next.page-numbers, a:contains("Berikutnya"), a:contains("Next")').length > 0;
+      if (hasNextPage && (maxPage === null || maxPage <= currentPage)) {
+        maxPage = currentPage + 1;
+      }
+      return { maxPage, hasNextPage };
+    }
+
+    // 2. Check .hpage (present on /manga/ catalog)
+    const hpageEl = $('.hpage').first();
+    if (hpageEl.length > 0) {
+      hasNextPage = hpageEl.find('a.r, a:contains("Next"), a:contains("Selanjutnya")').length > 0;
+      return { maxPage: null, hasNextPage };
+    }
+
+    // Fallback: check general page elements
     $('a.page-numbers').each((_, el) => {
       const n = parseInt($(el).text().trim(), 10);
-      if (!isNaN(n) && n > maxPage) maxPage = n;
+      if (!isNaN(n) && (maxPage === null || n > maxPage)) maxPage = n;
     });
-    const hasNextPage = $('a.next.page-numbers').length > 0;
-    return { maxPage: maxPage > currentPage ? maxPage : null, hasNextPage };
+    hasNextPage = $('a.r, a.next, a:contains("Next"), a:contains("Selanjutnya")').length > 0;
+    return { maxPage: maxPage && maxPage > currentPage ? maxPage : null, hasNextPage };
   }
 
   _parseCardList($) {

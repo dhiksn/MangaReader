@@ -326,7 +326,21 @@ class VoratoonSource extends BaseSource {
     };
   }
 
-  async getDetails(slug) {
+  async _resolveSeriesSlug(slug) {
+    try {
+      const query = String(slug || '').replace(/-/g, ' ').trim();
+      if (!query) return null;
+      const res = await this.search(query, 1);
+      const match = (res.data || []).find(
+        (d) => d.slug === slug || d.slug.startsWith(`${slug}-`) || d.slug.includes(slug)
+      );
+      return match ? match.slug : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async getDetails(slug, _retried = false) {
     const cleanSlug = String(slug || '').replace(/^\/+|\/+$/g, '').split('/')[0];
     if (!cleanSlug) throw createBadRequest("Parameter 'slug' wajib diisi", 'INVALID_PARAMETER');
 
@@ -335,13 +349,27 @@ class VoratoonSource extends BaseSource {
     try {
       html = await getHtml(url, { headers: this._headers });
     } catch (err) {
-      if (err.statusCode === 404) throw createNotFound(`Series '${cleanSlug}' tidak ditemukan di VoraToon`, 'NOT_FOUND');
+      if (err.statusCode === 404) {
+        if (!_retried) {
+          const resolved = await this._resolveSeriesSlug(cleanSlug);
+          if (resolved && resolved !== cleanSlug) return this.getDetails(resolved, true);
+        }
+        throw createNotFound(`Series '${cleanSlug}' tidak ditemukan di VoraToon`, 'NOT_FOUND');
+      }
       throw err;
     }
 
     const $ = cheerio.load(html);
 
-    const title = $('h1.series-title').text().trim() || cleanSlug;
+    const rawTitle = $('h1.series-title').text().trim();
+    if (!rawTitle) {
+      if (!_retried) {
+        const resolved = await this._resolveSeriesSlug(cleanSlug);
+        if (resolved && resolved !== cleanSlug) return this.getDetails(resolved, true);
+      }
+      throw createNotFound(`Series '${cleanSlug}' tidak ditemukan di VoraToon`, 'NOT_FOUND');
+    }
+    const title = rawTitle;
     const altTitle = $('p.alternative-title').text().trim() || null;
     const synopsis = $('p.synopsis.synopsis-desktop').first().text().trim() ||
                      $('p.synopsis').first().text().trim() || null;
@@ -422,7 +450,7 @@ class VoratoonSource extends BaseSource {
     };
   }
 
-  async getPages(slug, chapter) {
+  async getPages(slug, chapter, _retried = false) {
     const rawSlug = String(slug || '').trim();
     if (!rawSlug) throw createBadRequest("Parameter 'slug' wajib diisi", 'INVALID_PARAMETER');
 
@@ -443,7 +471,15 @@ class VoratoonSource extends BaseSource {
     try {
       html = await getHtml(url, { headers: this._headers });
     } catch (err) {
-      if (err.statusCode === 404) throw createNotFound(`Chapter '${targetChapter}' tidak ditemukan di VoraToon`, 'NOT_FOUND');
+      if (err.statusCode === 404) {
+        if (!_retried) {
+          const resolved = await this._resolveSeriesSlug(targetSlug);
+          if (resolved && resolved !== targetSlug) {
+            return this.getPages(resolved, targetChapter, true);
+          }
+        }
+        throw createNotFound(`Chapter '${targetChapter}' tidak ditemukan di VoraToon`, 'NOT_FOUND');
+      }
       throw err;
     }
 
@@ -482,15 +518,27 @@ class VoratoonSource extends BaseSource {
     images = [...new Set(images.filter(Boolean))];
 
     if (images.length === 0) {
+      if (!_retried) {
+        const resolved = await this._resolveSeriesSlug(targetSlug);
+        if (resolved && resolved !== targetSlug) {
+          return this.getPages(resolved, targetChapter, true);
+        }
+      }
       throw createBadGateway('Gagal menemukan gambar chapter dari VoraToon', 'UPSTREAM_ERROR');
     }
 
-    const pages = images.map((imgUrl, index) => ({
-      page: index + 1,
-      url: imgUrl,
-      directUrl: imgUrl,
-      proxyUrl: `/api/proxy/image?url=${encodeURIComponent(imgUrl)}&referer=${encodeURIComponent(`${this.baseUrl}/`)}`,
-    }));
+    const pages = images.map((imgUrl, index) => {
+      let referer = `${this.baseUrl}/`;
+      try {
+        referer = `${new URL(imgUrl).origin}/`;
+      } catch (_) {}
+      return {
+        page: index + 1,
+        url: imgUrl,
+        directUrl: imgUrl,
+        proxyUrl: `/api/proxy/image?url=${encodeURIComponent(imgUrl)}&referer=${encodeURIComponent(referer)}`,
+      };
+    });
 
     const $ = cheerio.load(html);
     // Build clean title from manga slug + chapter number

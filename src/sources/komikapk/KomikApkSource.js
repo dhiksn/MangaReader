@@ -3,7 +3,7 @@ const BaseSource = require('../BaseSource');
 const { getHtml } = require('../../utils/httpClient');
 const { createNotFound, createBadRequest, createBadGateway } = require('../../utils/errors');
 
-const PAGE_SIZE = 21;
+const PAGE_SIZE = 20;
 
 class KomikApkSource extends BaseSource {
   constructor() {
@@ -98,12 +98,21 @@ class KomikApkSource extends BaseSource {
     const $ = cheerio.load(html);
     const data = this._parseCardList($, url);
 
-    // Pagination: check if there's a next page link
-    const nextPageUrl = `${url.replace(/\/\d+$/, '')}/${pageNum + 1}`;
-    const hasNextPage = data.length >= PAGE_SIZE;
-    const maxPage = hasNextPage ? pageNum + 1 : pageNum;
+    // Pagination: check "Next Page" button
+    const nextBtn = $('a').filter((_, el) => {
+      const text = $(el).text().trim().toLowerCase();
+      return text.includes('next page') || text.includes('selanjutnya');
+    }).first();
 
-    return { data, hasNextPage, maxPage };
+    let hasNextPage = false;
+    if (nextBtn.length > 0) {
+      const cls = nextBtn.attr('class') || '';
+      hasNextPage = !cls.includes('btn-disabled');
+    } else {
+      hasNextPage = data.length >= PAGE_SIZE;
+    }
+
+    return { data, hasNextPage, maxPage: null };
   }
 
   // ─── Endpoints ───────────────────────────────────────────────────────────────

@@ -81,6 +81,8 @@ router.get('/image', async (req, res, next) => {
         targetUrl.hostname.includes('dbms.my.id')
       ) {
         referer = 'https://v1.soulscans.asia/';
+      } else if (targetUrl.hostname.includes('voratoon')) {
+        referer = `${targetUrl.protocol}//${targetUrl.hostname}/`;
       } else {
         referer = `${targetUrl.protocol}//${targetUrl.hostname}/`;
       }

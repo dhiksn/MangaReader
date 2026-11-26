@@ -15,9 +15,9 @@ class IzanamiScansSource extends BaseSource {
 
   getSupportedSorts() {
     return [
-      { id: 'latest',  name: 'Terbaru Update' },
+      { id: 'latest',  name: 'Terbaru' },
       { id: 'popular', name: 'Populer' },
-      { id: 'newest',  name: 'Terbaru Ditambahkan' },
+      { id: 'newest',  name: 'Diperbarui' },
       { id: 'az',      name: 'A-Z' },
     ];
   }
@@ -41,13 +41,36 @@ class IzanamiScansSource extends BaseSource {
   }
 
   _parsePagination($, currentPage) {
-    let maxPage = currentPage;
+    let maxPage = null;
+    let hasNextPage = false;
+
+    // 1. Check .pagination (present on search results)
+    const paginationEl = $('.pagination').first();
+    if (paginationEl.length > 0) {
+      paginationEl.find('a.page-numbers, span.page-numbers').each((_, el) => {
+        const n = parseInt($(el).text().trim(), 10);
+        if (!isNaN(n) && (maxPage === null || n > maxPage)) maxPage = n;
+      });
+      hasNextPage = paginationEl.find('a.next, a.next.page-numbers, a:contains("Berikutnya"), a:contains("Next")').length > 0;
+      if (hasNextPage && (maxPage === null || maxPage <= currentPage)) {
+        maxPage = currentPage + 1;
+      }
+      return { maxPage, hasNextPage };
+    }
+
+    // 2. Check .hpage (present on /manga/ catalog)
+    const hpageEl = $('.hpage').first();
+    if (hpageEl.length > 0) {
+      hasNextPage = hpageEl.find('a.r, a:contains("Next"), a:contains("Selanjutnya")').length > 0;
+      return { maxPage: null, hasNextPage };
+    }
+
+    // Fallback: check general page elements
     $('a.page-numbers').each((_, el) => {
       const n = parseInt($(el).text().trim(), 10);
-      if (!isNaN(n) && n > maxPage) maxPage = n;
+      if (!isNaN(n) && (maxPage === null || n > maxPage)) maxPage = n;
     });
-    const hasNextPage = $('a.next.page-numbers').length > 0;
-    if (hasNextPage && maxPage <= currentPage) maxPage = currentPage + 1;
+    hasNextPage = $('a.r, a.next, a:contains("Next"), a:contains("Selanjutnya")').length > 0;
     return { maxPage, hasNextPage };
   }
 
@@ -100,55 +123,49 @@ class IzanamiScansSource extends BaseSource {
     return { data, maxPage, hasNextPage };
   }
 
+  _listUrl(pageNum, params = {}) {
+    const base = `${this.baseUrl}/manga/`;
+    const query = { ...params };
+    if (pageNum > 1) {
+      query.page = pageNum;
+    }
+    const qs = new URLSearchParams(query).toString();
+    return qs ? `${base}?${qs}` : base;
+  }
+
   // ─── Endpoints ───────────────────────────────────────────────────────────────
 
   async getLatest(page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const url = pageNum === 1
-      ? `${this.baseUrl}/manga/?order=update`
-      : `${this.baseUrl}/manga/page/${pageNum}/?order=update`;
-    const { data, maxPage, hasNextPage } = await this._fetchListing(url, pageNum);
+    const { data, maxPage, hasNextPage } = await this._fetchListing(this._listUrl(pageNum, { order: 'update' }), pageNum);
     return { source: this.name, page: pageNum, maxPage, hasNextPage, data };
   }
 
   async getPopular(page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const url = pageNum === 1
-      ? `${this.baseUrl}/manga/?order=popular`
-      : `${this.baseUrl}/manga/page/${pageNum}/?order=popular`;
-    const { data, maxPage, hasNextPage } = await this._fetchListing(url, pageNum);
+    const { data, maxPage, hasNextPage } = await this._fetchListing(this._listUrl(pageNum, { order: 'popular' }), pageNum);
     return { source: this.name, page: pageNum, maxPage, hasNextPage, data };
   }
 
   async getNewest(page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const url = pageNum === 1
-      ? `${this.baseUrl}/manga/?order=latest`
-      : `${this.baseUrl}/manga/page/${pageNum}/?order=latest`;
-    const { data, maxPage, hasNextPage } = await this._fetchListing(url, pageNum);
+    const { data, maxPage, hasNextPage } = await this._fetchListing(this._listUrl(pageNum, { order: 'latest' }), pageNum);
     return { source: this.name, page: pageNum, maxPage, hasNextPage, data };
   }
 
   async getAz(page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const url = pageNum === 1
-      ? `${this.baseUrl}/manga/?order=title`
-      : `${this.baseUrl}/manga/page/${pageNum}/?order=title`;
-    const { data, maxPage, hasNextPage } = await this._fetchListing(url, pageNum);
+    const { data, maxPage, hasNextPage } = await this._fetchListing(this._listUrl(pageNum, { order: 'title' }), pageNum);
     return { source: this.name, page: pageNum, maxPage, hasNextPage, data };
   }
 
   async getList(page = 1, options = {}) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const order = this._resolveOrder(options.order || options.sort || 'update');
-    const params = new URLSearchParams({ order });
-    if (options.status) params.set('status', String(options.status).toLowerCase());
-    if (options.type) params.set('type', String(options.type).toLowerCase());
-    const base = pageNum === 1
-      ? `${this.baseUrl}/manga/`
-      : `${this.baseUrl}/manga/page/${pageNum}/`;
-    const url = `${base}?${params.toString()}`;
-    const { data, maxPage, hasNextPage } = await this._fetchListing(url, pageNum);
+    const params = { order };
+    if (options.status) params.status = String(options.status).toLowerCase();
+    if (options.type) params.type = String(options.type).toLowerCase();
+    const { data, maxPage, hasNextPage } = await this._fetchListing(this._listUrl(pageNum, params), pageNum);
     return { source: this.name, page: pageNum, maxPage, hasNextPage, data };
   }
 
@@ -218,10 +235,8 @@ class IzanamiScansSource extends BaseSource {
     });
 
     const genreParams = found.map((g) => `genre%5B%5D=${g.id}`).join('&');
-    const base = pageNum === 1
-      ? `${this.baseUrl}/manga/`
-      : `${this.baseUrl}/manga/page/${pageNum}/`;
-    const url = `${base}?${genreParams}&order=${order}`;
+    const pageParam = pageNum > 1 ? `&page=${pageNum}` : '';
+    const url = `${this.baseUrl}/manga/?${genreParams}&order=${order}${pageParam}`;
     const { data, maxPage, hasNextPage } = await this._fetchListing(url, pageNum);
     return { source: this.name, genre: found.map((g) => g.name).join(', '), page: pageNum, maxPage, hasNextPage, data };
   }
@@ -235,10 +250,7 @@ class IzanamiScansSource extends BaseSource {
     const cleanType = String(type || '').trim().toLowerCase();
     if (!cleanType) throw createBadRequest("Parameter 'type' wajib diisi", 'INVALID_PARAMETER');
     const order = this._resolveOrder(options.order || options.sort || 'update');
-    const base = pageNum === 1
-      ? `${this.baseUrl}/manga/`
-      : `${this.baseUrl}/manga/page/${pageNum}/`;
-    const url = `${base}?type=${encodeURIComponent(cleanType)}&order=${order}`;
+    const url = this._listUrl(pageNum, { type: cleanType, order });
     const { data, maxPage, hasNextPage } = await this._fetchListing(url, pageNum);
     return { source: this.name, type: cleanType, page: pageNum, maxPage, hasNextPage, data };
   }

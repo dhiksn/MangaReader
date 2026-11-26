@@ -41,6 +41,10 @@ class KomikuSource extends BaseSource {
       let cover = imgEl.attr('data-src') || imgEl.attr('src') || '';
       if (cover) {
         cover = cover.split('?')[0]; // Strip resize params for full resolution
+        // Skip Google encrypted thumbnails
+        if (cover.includes('gstatic.com') || cover.includes('encrypted-tbn')) {
+          cover = '';
+        }
       }
 
       const typeRaw = $el.find('div.tpe1_inf b').text().trim().toLowerCase();
@@ -132,6 +136,12 @@ class KomikuSource extends BaseSource {
             '';
           if (portrait) {
             portrait = portrait.split('?')[0];
+            // Skip Google encrypted thumbnails — they are tiny/blurry.
+            if (portrait.includes('gstatic.com') || portrait.includes('encrypted-tbn')) {
+              portrait = '';
+            }
+          }
+          if (portrait) {
             if (this._portraitCoversCache.size > 5000) {
               const firstKey = this._portraitCoversCache.keys().next().value;
               this._portraitCoversCache.delete(firstKey);
@@ -600,7 +610,13 @@ class KomikuSource extends BaseSource {
       $('div.ims img, div.ims > img').first().attr('data-src') || $('div.ims img').first().attr('src') || '';
     if (cover) {
       cover = cover.split('?')[0];
-      this._portraitCoversCache.set(cleanSlug, cover);
+      // Jika cover adalah Google encrypted thumbnail (gstatic.com),
+      // gambarnya sangat kecil dan blur — anggap tidak ada cover.
+      if (cover.includes('gstatic.com') || cover.includes('encrypted-tbn')) {
+        cover = '';
+      } else {
+        this._portraitCoversCache.set(cleanSlug, cover);
+      }
     }
 
     const chapters = [];

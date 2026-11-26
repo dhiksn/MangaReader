@@ -375,6 +375,89 @@ class CgbumSource extends BaseSource {
     };
   }
 
+  _decodeReaderAccess(data, pageToken) {
+    if (!data) return [];
+    // 1. If encrypted resources exist (new CGBUM format)
+    if (data.resources && typeof data.resources === 'string') {
+      try {
+        const value = data.resources;
+        if (value.slice(0, 2) === '2.' && /\.[a-f0-9]{64}$/.test(pageToken)) {
+          const signature = pageToken.slice(-64);
+          const key = [];
+          const encoded = value.slice(2).replace(/-/g, '+').replace(/_/g, '/');
+          for (let k = 0; k < 32; k++) {
+            key.push(parseInt(signature.slice(k * 2, k * 2 + 2), 16));
+          }
+          const padded = encoded + '='.repeat((4 - (encoded.length % 4)) % 4);
+          const binary = Buffer.from(padded, 'base64').toString('binary');
+          const chunks = [];
+          let chunk = '';
+          for (let i = 0; i < binary.length; i++) {
+            chunk += String.fromCharCode(binary.charCodeAt(i) ^ key[i % 32]);
+            if (chunk.length === 8192) {
+              chunks.push(chunk);
+              chunk = '';
+            }
+          }
+          chunks.push(chunk);
+          const packed = JSON.parse(chunks.join(''));
+          if (Array.isArray(packed) && packed.length === 3 && packed[2] === signature && Array.isArray(packed[0]) && Array.isArray(packed[1])) {
+            return packed[1].map((entry) => packed[0][entry[0]] + entry[1]);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. If data.images with layout gaps exists
+    let urls = data.images || data.pages || data.data || [];
+    if (typeof data.layout === 'string' && /^1\.[a-f0-9]{8}$/.test(data.layout) && Array.isArray(urls)) {
+      try {
+        const seed = parseInt(data.layout.slice(2), 16) >>> 0;
+        let n = 0, k = 0;
+        function amount(x) { return x < 1 ? 0 : x <= 5 ? 1 : x <= 20 ? 2 : 3 + (seed & 1); }
+        for (let d = 1; d <= 4; d++) {
+          const size = urls.length - d;
+          if (size > 0 && amount(size) === d) { n = size; k = d; break; }
+        }
+        if (n > 0) {
+          let state = seed || 0x9e3779b9;
+          const span = n - 1;
+          const gaps = [];
+          function step() { state ^= state << 13; state ^= state >>> 17; state ^= state << 5; return state >>> 0; }
+          for (let i = 0; i < k; i++) {
+            const lo = 1 + Math.floor(i * span / k);
+            const hi = Math.floor((i + 1) * span / k);
+            gaps.push((n === 1 ? 1 : lo + step() % (hi - lo + 1)) + i);
+          }
+          urls = urls.filter((_, idx) => gaps.indexOf(idx) === -1);
+        }
+      } catch (_) {}
+    }
+
+    // 3. Fallback transform ONLY if URL matches old /pj/komik/ path:
+    if (Array.isArray(urls) && urls.length > 0) {
+      return urls.map((img, idx) => {
+        const url = typeof img === 'string' ? img : (img?.url || img?.src || '');
+        if (!url) return '';
+        try {
+          if (url.includes('/pj/komik/') && !url.includes('/auto-')) {
+            const u = new URL(url);
+            u.hostname = u.hostname.replace('cdn1.', 'cdn2.').replace('cdn3.', 'cdn2.');
+            u.pathname = u.pathname.replace(/^(\/pj\/komik\/)(?!auto-)/, '$1auto-');
+            u.pathname = u.pathname.replace(/\/\d{4}-[a-f0-9]+\.(webp|jpg|jpeg|png)$/,
+              `/${String(idx + 1).padStart(3, '0')}.webp`);
+            return u.toString();
+          }
+          return url;
+        } catch (_) {
+          return url;
+        }
+      }).filter(Boolean);
+    }
+
+    return [];
+  }
+
   async getPages(slug, chapter) {
     const rawSlug = String(slug || '').trim();
     if (!rawSlug) throw createBadRequest("Parameter 'slug' wajib diisi", 'INVALID_PARAMETER');
@@ -391,66 +474,73 @@ class CgbumSource extends BaseSource {
     const { withPage } = require('../../utils/browserClient');
 
     const pages = await withPage(async (page) => {
-      const collectedUrls = [];
+      let raJson = null;
 
-      // Intercept responses from reader-access.php — this is where image URLs are delivered
+      // Intercept reader-access.php second response (after PoW) for full image data
       page.on('response', async (response) => {
         const url = response.url();
         if (!url.includes('reader-access.php')) return;
         try {
           const json = await response.json();
-          // Response shape: { images: [{ url, path }] } or { pages: [...] }
-          const imgs = json?.images || json?.pages || json?.data || [];
-          if (Array.isArray(imgs)) {
-            for (const img of imgs) {
-              const imgUrl = typeof img === 'string' ? img : (img?.url || img?.src || null);
-              if (imgUrl) collectedUrls.push(imgUrl);
-            }
+          if (json?.challenge) return; // skip PoW challenge
+          if (json?.resources || json?.images || json?.pages || json?.data) {
+            raJson = json;
           }
         } catch (_) {}
       });
 
-      await page.goto(chapterUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+      await page.goto(chapterUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
-      // Wait for page-container elements to exist
-      await page.waitForSelector('.page-container', { timeout: 30000 }).catch(() => null);
+      // Grab page token for resources decryption
+      const pageToken = await page.evaluate(() => window.__READER_ACCESS?.page || '');
 
-      // Give JS time to complete proof-of-work and load images
-      // Proof-of-work can take several seconds
+      // Wait for PoW to solve and images to load in DOM
       await page.waitForFunction(
-        () => {
-          const containers = document.querySelectorAll('.page-container');
-          if (!containers.length) return false;
-          // Check if at least one image has loaded (has a src set by JS)
-          const imgs = document.querySelectorAll('.page-container img[src]:not([src=""])');
-          return imgs.length > 0;
-        },
-        { timeout: 60000, polling: 1000 }
+        () => document.querySelectorAll('.page-container img[src]:not([src=""])').length > 0,
+        { timeout: 90000, polling: 1000 }
       ).catch(() => null);
 
-      // Extra wait for remaining images to populate
+      // 1. Primary: decrypt from reader-access response (has ALL real CDN URLs)
+      if (raJson) {
+        const decoded = this._decodeReaderAccess(raJson, pageToken);
+        if (decoded && decoded.length > 0) {
+          return decoded;
+        }
+      }
+
+      // 2. Fallback: Scroll to bottom to trigger lazy load for all pages and collect from DOM
+      await page.evaluate(async () => {
+        await new Promise((resolve) => {
+          let totalHeight = 0;
+          const distance = 1000;
+          const timer = setInterval(() => {
+            window.scrollBy(0, distance);
+            totalHeight += distance;
+            if (totalHeight >= document.body.scrollHeight) {
+              clearInterval(timer);
+              resolve();
+            }
+          }, 150);
+        });
+      });
+
+      // Wait for more images after scroll
       await new Promise((r) => setTimeout(r, 2000));
 
-      // Collect image URLs from DOM as fallback / complement
+      // DOM img.src
       const domUrls = await page.evaluate(() => {
         const urls = [];
         document.querySelectorAll('.page-container').forEach((container) => {
-          // Try data-url attribute first (may be populated by JS)
-          const dataUrl = container.getAttribute('data-url') || container.getAttribute('data-path');
-          if (dataUrl && dataUrl.trim()) { urls.push(dataUrl.trim()); return; }
-          // Try img src inside container
           const img = container.querySelector('img');
           if (img) {
-            const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+            const src = img.getAttribute('src') || '';
             if (src && !src.startsWith('data:')) urls.push(src);
           }
         });
         return urls;
       });
 
-      // Merge: prefer network-intercepted URLs, fall back to DOM
-      const merged = collectedUrls.length ? collectedUrls : domUrls;
-      return merged.filter(Boolean);
+      return domUrls.filter(Boolean);
     }, { referer: `${this.baseUrl}/` });
 
     if (!pages.length) {
@@ -472,6 +562,10 @@ class CgbumSource extends BaseSource {
       source: this.name,
       title: pageTitle,
       totalPages: pages.length,
+      // CGBUM CDN (cdn1.cgb.my.id / cdn2.cgb.my.id) blocks requests from VPS IP.
+      // Client should fetch images directly with Referer: https://cgbum.com/
+      noProxy: true,
+      referer: `${this.baseUrl}/`,
       pages: pages.map((url, index) => ({
         page: index + 1,
         url,
