@@ -759,13 +759,35 @@ class KomikuSource extends BaseSource {
     const $ = cheerio.load(html);
     const pages = [];
 
-    // Server hostname mapping (s2 is premium-only, default to origin)
-    const SERVERS = {
+    // Extract SERVERS dynamically from chapter HTML (fallback to known hosts)
+    const DEFAULT_SERVERS = {
       origin: 'img.komiku.org',
       s1: 'image1.komiku.to',
       s2: 'image2.komiku.to',
     };
-    const serverKey = String(server || 'origin').toLowerCase();
+    let SERVERS = { ...DEFAULT_SERVERS };
+    const serversMatch = html.match(/var\s+SERVERS\s*=\s*(\{[^}]+\})/);
+    if (serversMatch) {
+      try {
+        const parsed = JSON.parse(serversMatch[1]);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          SERVERS = { ...DEFAULT_SERVERS, ...parsed };
+        }
+      } catch (_) {}
+    }
+
+    const SERVER_ALIASES = {
+      1: 'origin',
+      cdn1: 'origin',
+      utama: 'origin',
+      2: 's1',
+      cdn2: 's1',
+      3: 's2',
+      cdn3: 's2',
+    };
+    const rawServer = String(server || 'origin').trim().toLowerCase();
+    const mappedKey = SERVER_ALIASES[rawServer] || rawServer;
+    const serverKey = SERVERS[mappedKey] ? mappedKey : 'origin';
     const targetHost = SERVERS[serverKey] || SERVERS.origin;
     const originHosts = Object.values(SERVERS);
 
@@ -783,6 +805,7 @@ class KomikuSource extends BaseSource {
       const src = $(img).attr('data-src') || $(img).attr('src') || '';
       if (
         !src ||
+        src.startsWith('data:') ||
         src.includes('komiku-promosi') ||
         src.includes('promosi') ||
         src.includes('/asset/img/') ||
