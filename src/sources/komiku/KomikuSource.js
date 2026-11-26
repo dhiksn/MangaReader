@@ -703,7 +703,7 @@ class KomikuSource extends BaseSource {
    * @param {string} slug Manga slug
    * @param {string|number} chapter Chapter number or identifier
    */
-  async getPages(slug, chapter) {
+  async getPages(slug, chapter, server = 'origin') {
     const cleanSlug = slug.replace(/^\/+|\/+$/g, '').split('/')[0];
     const chStr = String(chapter).trim();
 
@@ -759,12 +759,33 @@ class KomikuSource extends BaseSource {
     const $ = cheerio.load(html);
     const pages = [];
 
+    // Server hostname mapping (s2 is premium-only, default to origin)
+    const SERVERS = {
+      origin: 'img.komiku.org',
+      s1: 'image1.komiku.to',
+      s2: 'image2.komiku.to',
+    };
+    const serverKey = String(server || 'origin').toLowerCase();
+    const targetHost = SERVERS[serverKey] || SERVERS.origin;
+    const originHosts = Object.values(SERVERS);
+
+    function applyServer(src) {
+      try {
+        const u = new URL(src);
+        if (originHosts.includes(u.hostname)) u.hostname = targetHost;
+        return u.href;
+      } catch (_) {
+        return src;
+      }
+    }
+
     $('#Baca_Komik img').each((_, img) => {
       const src = $(img).attr('data-src') || $(img).attr('src') || '';
       if (
         !src ||
         src.includes('komiku-promosi') ||
         src.includes('promosi') ||
+        src.includes('/asset/img/') ||
         /\/ads[\/_.-]/i.test(src) ||
         src.includes('googleads') ||
         src.includes('adservice') ||
@@ -773,7 +794,7 @@ class KomikuSource extends BaseSource {
         return;
       }
 
-      const cleanSrc = src.trim();
+      const cleanSrc = applyServer(src.trim());
       pages.push({
         page: pages.length + 1,
         url: cleanSrc,
@@ -794,6 +815,12 @@ class KomikuSource extends BaseSource {
       source: this.name,
       title: `${mangaTitle} Chapter ${chStr}`,
       chapter: chStr,
+      server: serverKey,
+      availableServers: [
+        { id: 'origin', name: 'Utama' },
+        { id: 's1', name: 'Cadangan 1' },
+        { id: 's2', name: 'Super Kencang 1 (Premium)' },
+      ],
       totalPages: pages.length,
       headers: {
         Referer: 'https://komiku.org/',
