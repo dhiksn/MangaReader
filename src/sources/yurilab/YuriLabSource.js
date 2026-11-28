@@ -350,9 +350,18 @@ class YuriLabSource extends BaseSource {
   }
 
   async _loadChaptersPuppeteer(mangaBaseUrl) {
-    const { withPage } = require('../../utils/browserClient');
+    const { withPage, getBrowser } = require('../../utils/browserClient');
     const cheerio = require('cheerio');
 
+    // ── 1. Try direct fetch with cached cookie first ───────────────────────
+    if (this._yuriCookies) {
+      const result = await this._fetchChaptersDirect(mangaBaseUrl);
+      if (result.length > 0) return result;
+      // Cookie expired, clear and fall through to puppeteer
+      this._yuriCookies = null;
+    }
+
+    // ── 2. Use puppeteer — also harvest cookies for future requests ────────
     try {
       const allItems = await withPage(async (page) => {
         const intercepted = [];
@@ -376,13 +385,24 @@ class YuriLabSource extends BaseSource {
           } catch (_) {}
         });
 
-        await page.goto(`${mangaBaseUrl}/`, { waitUntil: 'networkidle2', timeout: 45000 });
-        await new Promise(r => setTimeout(r, 2000));
+        await page.goto(`${mangaBaseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
-        // If intercept got chapters, return them
+        // Wait for ajax/chapters to fire (triggered by page JS)
+        await page.waitForResponse(
+          r => r.url().includes('ajax/chapters'),
+          { timeout: 20000 }
+        ).catch(() => null);
+
+        // Save cookies for future direct requests
+        const cookies = await page.cookies(`${this.baseUrl}/`);
+        if (cookies.length > 0) {
+          this._yuriCookies = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+          this._yuriCookiesAt = Date.now();
+        }
+
         if (intercepted.length > 0) return intercepted;
 
-        // Fallback: parse from DOM
+        // DOM fallback
         return page.evaluate(() => {
           const items = [];
           document.querySelectorAll('li.wp-manga-chapter').forEach(el => {
@@ -398,8 +418,56 @@ class YuriLabSource extends BaseSource {
         });
       }, { referer: `${this.baseUrl}/` });
 
-      // Reverse to oldest-first, skip coin-locked (#)
       return allItems.reverse().reduce((acc, item) => {
+        if (!item.href || item.href === '#' || item.href.startsWith('#')) return acc;
+        acc.push({
+          title: item.title,
+          slug: item.href,
+          endpoint: `/api/sources/${this.name}/chapter/${encodeURIComponent(item.href)}`,
+          date: item.date,
+        });
+        return acc;
+      }, []);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /**
+   * Fetch chapter list directly using cached cookies — fast path.
+   * @private
+   */
+  async _fetchChaptersDirect(mangaBaseUrl) {
+    const cheerio = require('cheerio');
+    // Cookie valid for 30 minutes
+    if (!this._yuriCookies || (Date.now() - (this._yuriCookiesAt || 0)) > 30 * 60 * 1000) {
+      this._yuriCookies = null;
+      return [];
+    }
+    try {
+      const { fetchWithHeaders } = require('../../utils/httpClient');
+      const res = await fetchWithHeaders(`${mangaBaseUrl}/ajax/chapters/?t=1`, {
+        method: 'GET',
+        headers: {
+          ...this._headers({ 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html, */*; q=0.01' }),
+          Cookie: this._yuriCookies,
+        },
+      });
+      const text = await res.text();
+      if (!text.includes('wp-manga-chapter') && !text.includes('version-chap')) return [];
+
+      const $ = cheerio.load(text);
+      const items = [];
+      $('li.wp-manga-chapter').each((_, el) => {
+        const a = $(el).find('a').first();
+        items.push({
+          href: a.attr('href') || '',
+          title: a.text().trim(),
+          date: $(el).find('.chapter-release-date, .release-date').first().text().trim() || null,
+        });
+      });
+
+      return items.reverse().reduce((acc, item) => {
         if (!item.href || item.href === '#' || item.href.startsWith('#')) return acc;
         acc.push({
           title: item.title,
