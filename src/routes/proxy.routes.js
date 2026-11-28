@@ -78,9 +78,10 @@ router.get('/image', async (req, res, next) => {
         referer = 'https://v3.ainzscans01.com/';
       } else if (
         targetUrl.hostname.includes('soulscans') ||
-        targetUrl.hostname.includes('dbms.my.id')
+        targetUrl.hostname.includes('dbms.my.id') ||
+        targetUrl.hostname.includes('dbm.my.id')
       ) {
-        referer = 'https://v1.soulscans.asia/';
+        referer = 'https://s2.soulscans.fit/';
       } else if (targetUrl.hostname.includes('voratoon')) {
         referer = `${targetUrl.protocol}//${targetUrl.hostname}/`;
       } else {
@@ -96,7 +97,8 @@ router.get('/image', async (req, res, next) => {
       referer.endsWith('.xxx') ||
       referer.endsWith('.asia') ||
       referer.endsWith('.to') ||
-      referer.endsWith('.info')
+      referer.endsWith('.info') ||
+      referer.endsWith('.fit')
     ) {
       referer += '/';
     }

@@ -6,9 +6,9 @@ const { formatRelativeTime } = require('../../utils/date');
 class SoulScansSource extends BaseSource {
   constructor() {
     super('soulscans', 'SoulScans');
-    this.baseUrl = 'https://v1.soulscans.asia';
-    this.apiBase = 'https://v1.soulscans.asia/api';
-    this.icon = `https://img.soulscans.asia/api/uploads/site-branding/favicon-1783217076495-izt4sc.png`;
+    this.baseUrl = 'https://s2.soulscans.fit';
+    this.apiBase = 'https://s2.soulscans.fit/api';
+    this.icon = `https://imgk.soulscans.fit/api/uploads/site-branding/favicon-1783217076495-izt4sc.png`;
 
     this._cachedGenres = null;
     this._cachedGenresExpiresAt = 0;
@@ -16,8 +16,8 @@ class SoulScansSource extends BaseSource {
 
   getSupportedSorts() {
     return [
-      { id: 'latest', name: 'Terbaru Update' },
-      { id: 'newest', name: 'Terbaru Ditambahkan' },
+      { id: 'latest', name: 'Terbaru' },
+      { id: 'newest', name: 'Diperbarui' },
       { id: 'popular', name: 'Populer' },
       { id: 'rating', name: 'Rating' },
       { id: 'az', name: 'A-Z' },
@@ -77,10 +77,10 @@ class SoulScansSource extends BaseSource {
     // Fix relative/localhost URLs from API
     if (url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')) {
       const path = url.replace(/^https?:\/\/[^/]+/, '');
-      return `https://img.soulscans.asia${path}`;
+      return `https://imgk.soulscans.fit${path}`;
     }
     if (url.startsWith('/api/')) {
-      return `https://img.soulscans.asia${url}`;
+      return `https://imgk.soulscans.fit${url}`;
     }
     return url;
   }
@@ -120,35 +120,7 @@ class SoulScansSource extends BaseSource {
 
   async getLatest(page = 1) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    // Use home-sections API for latest — returns 216 items sorted by latest update
-    // Paginate client-side (30 per page)
-    const limit = 30;
-    const offset = (pageNum - 1) * limit;
-
-    const json = await getJson(
-      `https://img.soulscans.asia/api/comic/home-sections?hotLimit=4&popularLimit=16&projectLimit=18&updateLimit=216&sections=latest_comic_updates`,
-      { headers: this._headers }
-    );
-    const allItems = json.latest_comic_updates || [];
-    const slice = allItems.slice(offset, offset + limit);
-    const maxPage = Math.ceil(allItems.length / limit);
-    const hasNextPage = pageNum < maxPage;
-
-    const data = slice.map((item) => {
-      const latestChRaw = item.chapters?.[0]?.number || item.chapters?.[0]?.chapter_number || null;
-      const latestCh = latestChRaw
-        ? (parseFloat(latestChRaw) % 1 === 0 ? String(parseInt(latestChRaw, 10)) : String(parseFloat(latestChRaw)))
-        : null;
-      return {
-        title: item.series_title || item.series_slug,
-        slug: item.series_slug,
-        cover: this._cleanCoverUrl(item.poster_image_url),
-        type: (item.series_comic_type || item.series_comic_subtype)?.toLowerCase() || null,
-        status: this._parseState(item.series_status),
-        latestChapter: latestCh,
-      };
-    });
-
+    const { data, hasNextPage, maxPage } = await this._fetchList({ page: pageNum, sort: 'latest', order: 'desc' });
     return { source: this.name, page: pageNum, maxPage, hasNextPage, data };
   }
 
@@ -259,14 +231,11 @@ class SoulScansSource extends BaseSource {
   async getList(page = 1, options = {}) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const sort = this._resolveSort(options.sort || options.order || 'latest');
-    // Jika latest tanpa filter, arahkan ke getLatest (home-sections) yang datanya real-time update
-    if (sort === 'latest' && !options.status && !options.type && !options.genre && !options.q && !options.query) {
-      return this.getLatest(pageNum);
-    }
     const params = { page: pageNum, sort, order: 'desc' };
     if (options.status) params.status = String(options.status).toUpperCase();
     if (options.type) params.comic_type = String(options.type).toUpperCase();
     if (options.q || options.query) params.q = options.q || options.query;
+    if (options.genre) params.genre = options.genre;
     const { data, hasNextPage, maxPage } = await this._fetchList(params);
     return { source: this.name, page: pageNum, maxPage, hasNextPage, data };
   }
@@ -387,18 +356,6 @@ class SoulScansSource extends BaseSource {
     let chSlug = String(chapterSlug || '').trim();
     if (!mangaSlug || !chSlug) throw createBadRequest("Parameter 'slug' dan 'chapter' wajib diisi", 'INVALID_PARAMETER');
 
-    // Resolve chapter slug from number if needed
-    if (/^[0-9.]+$/.test(chSlug) || /^chapter-[0-9.]+$/i.test(chSlug)) {
-      const details = await this.getDetails(mangaSlug);
-      const chNum = parseFloat(chSlug.replace(/^chapter-/i, ''));
-      const target = details.chapters.find((ch) => {
-        const m = ch.title.match(/Chapter\s+([0-9.]+)/i);
-        return m && parseFloat(m[1]) === chNum;
-      });
-      if (!target) throw createNotFound(`Chapter '${chSlug}' tidak ditemukan untuk manga '${mangaSlug}'`, 'NOT_FOUND');
-      chSlug = target.slug;
-    }
-
     let json;
     try {
       json = await getJson(
@@ -406,8 +363,24 @@ class SoulScansSource extends BaseSource {
         { headers: this._headers }
       );
     } catch (err) {
-      if (err.statusCode === 404) throw createNotFound(`Chapter tidak ditemukan di SoulScans`, 'NOT_FOUND');
-      throw err;
+      if (err.statusCode === 404) {
+        // Try resolving chapter slug from details
+        const details = await this.getDetails(mangaSlug);
+        const chNum = parseFloat(chSlug.replace(/^chapter-/i, ''));
+        const target = details.chapters.find((ch) => {
+          if (ch.slug === chSlug || ch.slug === String(chNum)) return true;
+          const m = ch.title.match(/(?:chapter|ch)[.\s-]*([0-9.]+)/i);
+          return m && parseFloat(m[1]) === chNum;
+        });
+        if (!target) throw createNotFound(`Chapter '${chSlug}' tidak ditemukan untuk manga '${mangaSlug}'`, 'NOT_FOUND');
+        chSlug = target.slug;
+        json = await getJson(
+          `${this.apiBase}/series/comic/${mangaSlug}/chapter/${chSlug}`,
+          { headers: this._headers }
+        );
+      } else {
+        throw err;
+      }
     }
 
     const chapterObj = json.chapter || json;
