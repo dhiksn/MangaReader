@@ -20,23 +20,38 @@ async function fetchWithHeaders(url, options = {}) {
   };
 
   let response;
-  try {
-    response = await fetch(url, {
-      method: options.method || 'GET',
-      headers,
-      body: options.body,
-      signal: AbortSignal.timeout(timeoutMs),
-      redirect: 'follow',
-    });
-  } catch (err) {
-    if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      response = await fetch(url, {
+        method: options.method || 'GET',
+        headers,
+        body: options.body,
+        signal: AbortSignal.timeout(timeoutMs),
+        redirect: 'follow',
+      });
+      break;
+    } catch (err) {
+      lastErr = err;
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+        break;
+      }
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 600));
+        continue;
+      }
+    }
+  }
+
+  if (!response) {
+    if (lastErr?.name === 'TimeoutError' || lastErr?.name === 'AbortError') {
       throw createBadGateway(
         `Target website gagal diakses (waktu tunggu habis setelah ${timeoutMs / 1000}s)`,
         'UPSTREAM_TIMEOUT'
       );
     }
     throw createBadGateway(
-      `Target website gagal diakses: ${err.message || 'Koneksi terputus'}`,
+      `Target website gagal diakses: ${lastErr?.message || 'Koneksi terputus'}`,
       'UPSTREAM_ERROR'
     );
   }

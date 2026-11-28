@@ -672,9 +672,18 @@ class SoftkomikSource extends BaseSource {
   async getDetails(slug) {
     const cleanSlug = slug.replace(/^\/+|\/+$/g, '').split('/')[0];
     const url = `${this.baseUrl}/${cleanSlug}`;
-    const html = await getHtml(url, {
-      headers: { Referer: `${this.baseUrl}/` },
-    });
+
+    const headers = { Referer: `${this.baseUrl}/` };
+    if (this._authCookies && Date.now() < this._authExpiresAt) {
+      headers['Cookie'] = this._authCookies;
+    } else if (process.env.SOFTKOMIK_EMAIL && process.env.SOFTKOMIK_PASSWORD) {
+      try {
+        const cookies = await this._ensureAuthenticated();
+        if (cookies) headers['Cookie'] = cookies;
+      } catch (_) {}
+    }
+
+    const html = await getHtml(url, { headers });
 
     const nextData = this._extractNextData(html);
     const pageProps = nextData?.props?.pageProps;
@@ -816,11 +825,37 @@ class SoftkomikSource extends BaseSource {
 
     const url = `${this.baseUrl}/${cleanSlug}/chapter/${targetChapter}`;
 
-    const html = await getHtml(url, {
-      headers: { Referer: `${this.baseUrl}/` },
-    });
+    const headers = { Referer: `${this.baseUrl}/` };
+    if (this._authCookies && Date.now() < this._authExpiresAt) {
+      headers['Cookie'] = this._authCookies;
+    } else if (process.env.SOFTKOMIK_EMAIL && process.env.SOFTKOMIK_PASSWORD) {
+      try {
+        const cookies = await this._ensureAuthenticated();
+        if (cookies) headers['Cookie'] = cookies;
+      } catch (err) {
+        console.warn('[Softkomik] Auth skipped during getPages, proceeding as guest:', err.message);
+      }
+    }
 
-    const nextData = this._extractNextData(html);
+    let html = await getHtml(url, { headers });
+    let nextData = this._extractNextData(html);
+
+    // If redirected to login and credentials exist, force re-login and retry once
+    if (nextData?.page === '/akun/login' && process.env.SOFTKOMIK_EMAIL && process.env.SOFTKOMIK_PASSWORD) {
+      try {
+        this._authCookies = null;
+        this._authExpiresAt = 0;
+        const cookies = await this.login();
+        if (cookies) {
+          headers['Cookie'] = cookies;
+          html = await getHtml(url, { headers });
+          nextData = this._extractNextData(html);
+        }
+      } catch (e) {
+        console.warn('[Softkomik] Re-login failed during getPages:', e.message);
+      }
+    }
+
     const pageProps = nextData?.props?.pageProps;
     const stk = pageProps?._stk;
     const decrypted = this._decryptPayload(stk);
@@ -848,9 +883,22 @@ class SoftkomikSource extends BaseSource {
         page: index + 1,
         url: directUrl,
         directUrl,
-        proxyUrl: proxyPath,
+        proxyPath,
       };
     });
+
+    if (pages.length === 0) {
+      if (nextData?.page === '/akun/login') {
+        throw createBadGateway(
+          'Chapter ini memerlukan login akun Softkomik. Silakan periksa kredensial SOFTKOMIK_EMAIL dan SOFTKOMIK_PASSWORD di file .env',
+          'UPSTREAM_ERROR'
+        );
+      }
+      throw createBadGateway(
+        'Tidak ada gambar yang tersedia untuk chapter ini di Softkomik',
+        'UPSTREAM_ERROR'
+      );
+    }
 
     return {
       source: this.name,
