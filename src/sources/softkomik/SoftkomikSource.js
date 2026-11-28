@@ -883,7 +883,7 @@ class SoftkomikSource extends BaseSource {
         page: index + 1,
         url: directUrl,
         directUrl,
-        proxyPath,
+        proxyUrl: proxyPath,
       };
     });
 

@@ -800,7 +800,10 @@ router.get('/sources/:source/chapter/:slug/:chapter', resolveSource, async (req,
     const baseUrl = `${protocol}://${host}`;
 
     const formattedPages = (result.pages || []).map((p) => {
-      const fullProxy = p.proxyUrl?.startsWith('http') ? p.proxyUrl : `${baseUrl}${p.proxyUrl}`;
+      const proxyStr = p.proxyUrl || p.proxyPath || (p.directUrl ? `/api/proxy/image?url=${encodeURIComponent(p.directUrl)}` : '');
+      const fullProxy = proxyStr.startsWith('http')
+        ? proxyStr
+        : (proxyStr ? `${baseUrl}${proxyStr.startsWith('/') ? '' : '/'}${proxyStr}` : (p.directUrl || p.url));
       return {
         page: p.page,
         url: fullProxy,
