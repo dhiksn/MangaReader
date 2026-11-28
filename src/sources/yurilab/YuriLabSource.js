@@ -306,8 +306,8 @@ class YuriLabSource extends BaseSource {
       genres.push({ name, slug: gSlug });
     });
 
-    // Chapters — paginated POST to /ajax/chapters/?t=N
-    const chapters = await this._loadChapters(url.replace(/\/$/, ''), $);
+    // Chapters — load via puppeteer (cookie required for ajax/chapters endpoint)
+    const chapters = await this._loadChaptersPuppeteer(url.replace(/\/$/, ''));
 
     // Related — from .manga-x-slider after h3 "Related Series"
     const related = [];
@@ -349,11 +349,77 @@ class YuriLabSource extends BaseSource {
     };
   }
 
+  async _loadChaptersPuppeteer(mangaBaseUrl) {
+    const { withPage } = require('../../utils/browserClient');
+    const cheerio = require('cheerio');
+
+    try {
+      const allItems = await withPage(async (page) => {
+        const intercepted = [];
+
+        page.on('response', async (response) => {
+          const url = response.url();
+          if (!url.includes('ajax/chapters')) return;
+          try {
+            const text = await response.text();
+            if (text.includes('wp-manga-chapter') || text.includes('version-chap')) {
+              const c$ = cheerio.load(text);
+              c$('li.wp-manga-chapter').each((_, el) => {
+                const a = c$(el).find('a').first();
+                intercepted.push({
+                  href: a.attr('href') || '',
+                  title: a.text().trim(),
+                  date: c$(el).find('.chapter-release-date, .release-date').first().text().trim() || null,
+                });
+              });
+            }
+          } catch (_) {}
+        });
+
+        await page.goto(`${mangaBaseUrl}/`, { waitUntil: 'networkidle2', timeout: 45000 });
+        await new Promise(r => setTimeout(r, 2000));
+
+        // If intercept got chapters, return them
+        if (intercepted.length > 0) return intercepted;
+
+        // Fallback: parse from DOM
+        return page.evaluate(() => {
+          const items = [];
+          document.querySelectorAll('li.wp-manga-chapter').forEach(el => {
+            const a = el.querySelector('a');
+            const dateEl = el.querySelector('.chapter-release-date, .release-date');
+            items.push({
+              href: a?.getAttribute('href') || '',
+              title: a?.textContent?.trim() || '',
+              date: dateEl?.textContent?.trim() || null,
+            });
+          });
+          return items;
+        });
+      }, { referer: `${this.baseUrl}/` });
+
+      // Reverse to oldest-first, skip coin-locked (#)
+      return allItems.reverse().reduce((acc, item) => {
+        if (!item.href || item.href === '#' || item.href.startsWith('#')) return acc;
+        acc.push({
+          title: item.title,
+          slug: item.href,
+          endpoint: `/api/sources/${this.name}/chapter/${encodeURIComponent(item.href)}`,
+          date: item.date,
+        });
+        return acc;
+      }, []);
+    } catch (_) {
+      return [];
+    }
+  }
+
   async _loadChapters(mangaBaseUrl, $) {
     const ajaxUrl = `${mangaBaseUrl}/ajax/chapters/`;
-    const headers = this._headers({ 'X-Requested-With': 'XMLHttpRequest', 'Content-Length': '0' });
+    const headers = this._headers({ 'X-Requested-With': 'XMLHttpRequest' });
 
     // Fetch pages in batches of CHAPTER_BATCH until empty or repeated
+    // Madara theme uses GET /series/{slug}/ajax/chapters/?t={page}
     const allItems = [];
     let page = 1;
     let previousFirstHtml = null;
@@ -363,10 +429,10 @@ class YuriLabSource extends BaseSource {
       const pageNums = Array.from({ length: CHAPTER_BATCH }, (_, i) => page + i);
       const results = await Promise.all(pageNums.map(async (t) => {
         try {
-          const res = await fetchWithHeaders(`${ajaxUrl}?t=${t}`, { method: 'POST', headers });
+          const res = await fetchWithHeaders(`${ajaxUrl}?t=${t}`, { method: 'GET', headers });
           const html = await res.text();
           const c$ = cheerio.load(html);
-          return c$('ul.version-chap li.wp-manga-chapter').toArray().map(el => ({
+          return c$('ul.version-chap li.wp-manga-chapter, li.wp-manga-chapter').toArray().map(el => ({
             html: c$(el).html(),
             href: c$(el).find('a').first().attr('href') || '',
             title: c$(el).find('a').first().text().trim(),
